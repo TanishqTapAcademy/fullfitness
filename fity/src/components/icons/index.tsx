@@ -188,6 +188,94 @@ export const CoachAvatarIcon: React.FC<IconProps> = ({ size = 40 }) => (
   </Svg>
 );
 
+export const PullIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#0D0D0D' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M15 9L9 15M9 9h6v6"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+export const MicIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#777777' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x="9" y="3" width="6" height="12" rx="3" stroke={color} strokeWidth={1.6} fill="none" />
+    <Path d="M5 11a7 7 0 0014 0M12 18v3" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+  </Svg>
+);
+
+export const SendIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#0D0D0D' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M4 12l16-8-6 16-2-6-8-2z"
+      stroke={color}
+      strokeWidth={1.8}
+      strokeLinejoin="round"
+      fill={color}
+    />
+  </Svg>
+);
+
+export const TrophyIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#E8FF6B' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M7 4h10v4a5 5 0 01-10 0V4zM5 5h2v3a3 3 0 01-3-3h1zM17 5h2a3 3 0 01-3 3V5h1zM9 14h6v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2zM8 20h8"
+      stroke={color}
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </Svg>
+);
+
+export const FlameIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#E8FF6B' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M12 2c2 3 5 5 5 9a5 5 0 01-10 0c0-2 1-3 2-4-.5 1.5 0 3 1 3.5C10 9 10 6 12 2z"
+      stroke={color}
+      strokeWidth={1.6}
+      strokeLinejoin="round"
+      fill={color}
+      fillOpacity={0.15}
+    />
+  </Svg>
+);
+
+export const CloseIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#FFFFFF' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Line x1="6" y1="6" x2="18" y2="18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    <Line x1="18" y1="6" x2="6" y2="18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+  </Svg>
+);
+
+export const ArrowLeftIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#FFFFFF' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M15 6l-6 6 6 6"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+export const ChatIcon: React.FC<IconProps> = ({ size = DEFAULT, color = '#E8FF6B' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-5 4V6z"
+      stroke={color}
+      strokeWidth={1.6}
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </Svg>
+);
+
 export const HeroIllustration: React.FC<IconProps> = ({ size = 220 }) => (
   <Svg width={size} height={size} viewBox="0 0 220 220">
     <Defs>

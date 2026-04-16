@@ -1,13 +1,23 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import Animated, { ZoomIn, FadeIn, FadeInDown, Easing } from 'react-native-reanimated';
+import Animated, {
+  ZoomIn,
+  FadeIn,
+  FadeInDown,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { ScreenShell } from '../../src/components/ScreenShell';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { CheckIcon } from '../../src/components/icons';
 import { useOnboardingStore, type NotificationPrefs } from '../../src/store/onboardingStore';
 import { colors } from '../../src/theme/colors';
 import { equipData, goalData, levelData } from '../../src/data/onboarding';
+import { DURATION } from '../../src/theme/motion';
 
 const equipShort: Record<string, string> = {
   full_gym: 'Full gym',
@@ -36,8 +46,26 @@ const rows: Row[] = [
 ];
 
 export default function Notifications() {
+  const router = useRouter();
   const { notifs, setNotif, goals, equip, level } = useOnboardingStore();
   const [done, setDone] = useState(false);
+  const flashOpacity = useSharedValue(0);
+
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flashOpacity.value }));
+
+  const startTraining = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // Lime flash → route replace so back gesture can't re-enter onboarding.
+    flashOpacity.value = withTiming(1, { duration: 120 }, (finished) => {
+      'worklet';
+      if (finished) {
+        flashOpacity.value = withTiming(0, { duration: 180 });
+      }
+    });
+    setTimeout(() => {
+      router.replace('/(app)/chat');
+    }, DURATION.fast);
+  };
 
   const primaryGoal = goals[0]
     ? goalData.find((g) => g.id === goals[0])?.label.toLowerCase() ?? 'fitness'
@@ -72,13 +100,9 @@ export default function Notifications() {
           Your first workout is ready when you are.
         </Animated.Text>
         <Animated.View entering={FadeIn.delay(500)} style={{ width: '100%', marginTop: 40 }}>
-          <PrimaryButton
-            label="Start training"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            }}
-          />
+          <PrimaryButton label="Start training" onPress={startTraining} />
         </Animated.View>
+        <Animated.View pointerEvents="none" style={[styles.flash, flashStyle]} />
       </View>
     );
   }
@@ -174,4 +198,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   recapLine: { color: colors.WHITE, fontSize: 14, fontWeight: '600' },
+  flash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.LIME,
+  },
 });
