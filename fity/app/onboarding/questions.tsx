@@ -34,9 +34,6 @@ export default function DynamicQuestions() {
     currentAnswer !== null &&
     !(Array.isArray(currentAnswer) && currentAnswer.length === 0);
 
-  // For chat_select, the continue button is handled internally via the plan preview
-  const isChatType = question?.type === 'chat_select';
-
   if (!question) {
     // All questions done
     router.replace('/onboarding/auth');

@@ -20,18 +20,18 @@ export const onboardingApi = {
     return res.json();
   },
 
-  saveResponse: async (userId: string, questionId: string, answer: any) => {
+  saveResponse: async (deviceId: string, questionId: string, answer: any) => {
     const res = await fetch(`${BASE_URL}/onboarding/responses`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, question_id: questionId, answer }),
+      body: JSON.stringify({ device_id: deviceId, question_id: questionId, answer }),
     });
     if (!res.ok) throw new Error('Failed to save response');
     return res.json();
   },
 
-  getResponses: async (userId: string) => {
-    const res = await fetch(`${BASE_URL}/onboarding/responses/${userId}`);
+  getResponses: async (deviceId: string) => {
+    const res = await fetch(`${BASE_URL}/onboarding/responses/${deviceId}`);
     if (!res.ok) throw new Error('Failed to fetch responses');
     return res.json();
   },

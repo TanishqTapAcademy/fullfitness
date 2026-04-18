@@ -422,6 +422,13 @@ export default function QuestionsPage(){
 
           {sel.type==="text_input" && <div><Lbl text="Placeholder"/><Inp value={sel.placeholder} onChange={v=>up("placeholder",v)}/></div>}
 
+          {sel.type==="grid_select" && <div style={{marginBottom:12}}>
+            <Lbl text="Columns"/>
+            <div style={{display:"flex",gap:4}}>
+              {[1,2,3].map(n=><button key={n} onClick={()=>up("columns",n)} style={{padding:"6px 16px",borderRadius:7,border:sel.columns===n?`2px solid ${A}`:`1px solid ${C.border}`,background:sel.columns===n?`${A}15`:C.card,color:sel.columns===n?A:C.text,fontSize:12,fontWeight:700,cursor:"pointer"}}>{n}</button>)}
+            </div>
+          </div>}
+
           {(sel.type==="slider"||sel.type==="number_stepper"||sel.type==="wheel") && <div>
             <div style={{display:"flex",gap:8,marginBottom:12}}>
               <div><Lbl text="Min"/><input type="number" value={sel.min??""} onChange={e=>up("min",+e.target.value)} style={{width:70,padding:8,fontSize:12,background:C.card,border:`1px solid ${C.border}`,borderRadius:7,color:C.text,outline:"none"}}/></div>

@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const KEY = 'anon_user_id';
+const KEY = 'device_id';
 
 function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -10,7 +10,7 @@ function generateUUID(): string {
   });
 }
 
-export async function getOrCreateUserId(): Promise<string> {
+export async function getOrCreateDeviceId(): Promise<string> {
   let id = await SecureStore.getItemAsync(KEY);
   if (!id) {
     id = generateUUID();

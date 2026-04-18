@@ -17,8 +17,12 @@ export default function ResponsesPage() {
   if (loading) return <div style={{ padding: 24, color: C.muted }}>Loading...</div>;
   if (!data) return <div style={{ padding: 24, color: C.muted }}>Failed to load responses</div>;
 
-  const filteredUsers = (data.users || []).filter(u =>
-    !search || u.user_id.toLowerCase().includes(search.toLowerCase())
+  // Map question_id → step_id for readable display
+  const idToStep = {};
+  (data.question_stats || []).forEach(q => { idToStep[q.id] = q.step_id; });
+
+  const filteredDevices = (data.devices || []).filter(d =>
+    !search || d.device_id.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -27,7 +31,7 @@ export default function ResponsesPage() {
 
       {/* Stats cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
-        <StatCard icon={<Users size={18} color={A} />} value={data.total_users} label="Total Users" />
+        <StatCard icon={<Users size={18} color={A} />} value={data.total_devices} label="Total Devices" />
         <StatCard icon={<Percent size={18} color={A} />} value={`${data.avg_completion}%`} label="Avg Completion" />
         <StatCard icon={<BarChart3 size={18} color={A} />} value={data.question_stats?.length || 0} label="Active Questions" />
       </div>
@@ -37,7 +41,7 @@ export default function ResponsesPage() {
         <h3 style={{ fontSize: 13, fontWeight: 700, color: C.muted, margin: '0 0 12px', letterSpacing: '.5px' }}>PER-QUESTION STATS</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(data.question_stats || []).map(q => {
-            const pct = data.total_users > 0 ? Math.round((q.response_count / data.total_users) * 100) : 0;
+            const pct = data.total_devices > 0 ? Math.round((q.response_count / data.total_devices) * 100) : 0;
             return (
               <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ width: 100, fontSize: 12, color: A, fontFamily: 'monospace', fontWeight: 600 }}>{q.step_id}</span>
@@ -51,12 +55,12 @@ export default function ResponsesPage() {
         </div>
       </div>
 
-      {/* Users table */}
+      {/* Devices table */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, padding: '8px 12px', background: C.card, borderRadius: 10, border: `1px solid ${C.border}` }}>
         <Search size={14} color={C.muted} />
         <input
           value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search by user ID..."
+          placeholder="Search by device ID..."
           style={{ flex: 1, fontSize: 13, background: 'transparent', border: 'none', color: C.text, outline: 'none' }}
         />
       </div>
@@ -65,33 +69,33 @@ export default function ResponsesPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: C.card }}>
-              {['User ID', 'Answered', 'Completion', 'Answers'].map(h => (
+              {['Device ID', 'Answered', 'Completion', 'Answers'].map(h => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: C.muted, fontWeight: 600, fontSize: 11, borderBottom: `1px solid ${C.border}` }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map(u => (
-              <tr key={u.user_id} style={{ borderBottom: `1px solid ${C.border}` }}>
+            {filteredDevices.map(d => (
+              <tr key={d.device_id} style={{ borderBottom: `1px solid ${C.border}` }}>
                 <td style={{ padding: '10px 14px', color: C.text, fontFamily: 'monospace', fontSize: 11 }}>
-                  {u.user_id.slice(0, 8)}...
+                  {d.device_id.slice(0, 8)}...
                 </td>
                 <td style={{ padding: '10px 14px', color: C.text }}>
-                  {u.answered} / {u.total}
+                  {d.answered} / {d.total}
                 </td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 60, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ width: `${u.percent}%`, height: '100%', background: u.percent === 100 ? '#4ade80' : A, borderRadius: 2 }} />
+                      <div style={{ width: `${d.percent}%`, height: '100%', background: d.percent === 100 ? '#4ade80' : A, borderRadius: 2 }} />
                     </div>
-                    <span style={{ fontSize: 11, color: u.percent === 100 ? '#4ade80' : A, fontWeight: 600 }}>{u.percent}%</span>
+                    <span style={{ fontSize: 11, color: d.percent === 100 ? '#4ade80' : A, fontWeight: 600 }}>{d.percent}%</span>
                   </div>
                 </td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {u.responses.map(r => (
-                      <span key={r.id} style={{ padding: '2px 8px', borderRadius: 4, background: `${A}10`, color: A, fontSize: 10, fontWeight: 500 }}>
-                        {r.question?.step_id}: {formatAnswer(r.answer)}
+                    {Object.entries(d.answers || {}).map(([qId, answer]) => (
+                      <span key={qId} style={{ padding: '2px 8px', borderRadius: 4, background: `${A}10`, color: A, fontSize: 10, fontWeight: 500 }}>
+                        {idToStep[qId] || qId.slice(0, 8)}: {formatAnswer(answer)}
                       </span>
                     ))}
                   </div>
@@ -100,9 +104,9 @@ export default function ResponsesPage() {
             ))}
           </tbody>
         </table>
-        {filteredUsers.length === 0 && (
+        {filteredDevices.length === 0 && (
           <div style={{ padding: 30, textAlign: 'center', color: C.muted, fontSize: 13 }}>
-            {search ? 'No users match your search' : 'No responses yet'}
+            {search ? 'No devices match your search' : 'No responses yet'}
           </div>
         )}
       </div>

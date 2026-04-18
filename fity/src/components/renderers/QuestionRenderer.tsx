@@ -4,7 +4,7 @@ import { MultiSelectRenderer } from './MultiSelectRenderer';
 import { SingleSelectRenderer } from './SingleSelectRenderer';
 import { GridSelectRenderer } from './GridSelectRenderer';
 import { WheelRenderer } from './WheelRenderer';
-import { ChatSelectRenderer } from './ChatSelectRenderer';
+
 
 interface Props {
   question: BackendQuestion;
@@ -23,8 +23,6 @@ export const QuestionRenderer: React.FC<Props> = ({ question, answer, onAnswer, 
       return <GridSelectRenderer question={question} answer={answer} onAnswer={onAnswer} />;
     case 'wheel':
       return <WheelRenderer question={question} answer={answer} onAnswer={onAnswer} />;
-    case 'chat_select':
-      return <ChatSelectRenderer question={question} answer={answer} onAnswer={onAnswer} />;
     default:
       return null;
   }

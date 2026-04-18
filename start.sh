@@ -5,7 +5,7 @@ tell application "Terminal"
     activate
 
     -- Tab 1: Backend API
-    do script "cd /Users/tanishqbhosale/Desktop/projects/fullFitness/backend && npm run dev" in front window
+    do script "cd /Users/tanishqbhosale/Desktop/projects/fullFitness/backend && source venv/bin/activate && python main.py" in front window
     delay 1
 
     -- Tab 2: Admin Panel

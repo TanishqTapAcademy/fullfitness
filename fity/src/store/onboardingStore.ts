@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Goal, Equipment, Level, QuitReason } from '../data/onboarding';
 import { onboardingApi, type BackendQuestion } from '../services/api';
-import { getOrCreateUserId } from '../services/userId';
+import { getOrCreateDeviceId } from '../services/userId';
 
 export interface NotificationPrefs {
   workoutReminders: boolean;
@@ -23,7 +23,7 @@ interface OnboardingState {
   questions: BackendQuestion[];
   answers: Record<string, any>;
   currentIndex: number;
-  userId: string | null;
+  deviceId: string | null;
   loading: boolean;
   error: string | null;
 
@@ -72,7 +72,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   questions: [],
   answers: {},
   currentIndex: 0,
-  userId: null,
+  deviceId: null,
   loading: false,
   error: null,
 
@@ -88,19 +88,19 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   // Dynamic actions
   fetchQuestions: async () => {
     set({ loading: true, error: null });
-    const uid = await getOrCreateUserId();
+    const did = await getOrCreateDeviceId();
     const data = await onboardingApi.getQuestions();
-    set({ questions: data.questions, userId: uid, loading: false });
+    set({ questions: data.questions, deviceId: did, loading: false });
   },
 
   setAnswer: (stepId, questionId, answer) => {
-    const { userId, answers } = get();
+    const { deviceId, answers } = get();
     const newAnswers = { ...answers, [stepId]: answer };
     set({ answers: newAnswers, ...syncLegacyFields(newAnswers) });
 
     // Fire-and-forget save to backend
-    if (userId) {
-      onboardingApi.saveResponse(userId, questionId, answer).catch(() => {});
+    if (deviceId) {
+      onboardingApi.saveResponse(deviceId, questionId, answer).catch(() => {});
     }
   },
 

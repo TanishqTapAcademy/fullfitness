@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
 }
 
 datasource db {
@@ -9,8 +11,8 @@ datasource db {
 }
 
 model Question {
-  id             String     @id @default(uuid())
-  step_id        String     @unique
+  id             String   @id @default(uuid())
+  step_id        String   @unique
   type           String
   title          String
   subtitle       String?
@@ -18,22 +20,19 @@ model Question {
   config         Json?
   coach_response Json?
   order          Int
-  is_active      Boolean    @default(true)
-  created_at     DateTime   @default(now())
-  updated_at     DateTime   @updatedAt
-  responses      Response[]
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   @@map("questions")
 }
 
 model Response {
-  id          String   @id @default(uuid())
-  user_id     String
-  question_id String
-  question    Question @relation(fields: [question_id], references: [id])
-  answer      Json
-  created_at  DateTime @default(now())
+  id         String   @id @default(uuid())
+  device_id  String   @unique
+  answers    Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  @@unique([user_id, question_id])
   @@map("responses")
 }
