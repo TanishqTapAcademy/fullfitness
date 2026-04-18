@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Question {
+  id             String     @id @default(uuid())
+  step_id        String     @unique
+  type           String
+  title          String
+  subtitle       String?
+  options        Json?
+  config         Json?
+  coach_response Json?
+  order          Int
+  is_active      Boolean    @default(true)
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+  responses      Response[]
+
+  @@map("questions")
+}
+
+model Response {
+  id          String   @id @default(uuid())
+  user_id     String
+  question_id String
+  question    Question @relation(fields: [question_id], references: [id])
+  answer      Json
+  created_at  DateTime @default(now())
+
+  @@unique([user_id, question_id])
+  @@map("responses")
+}

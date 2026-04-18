@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
@@ -7,10 +7,17 @@ import { StatusBar } from 'expo-status-bar';
 import { colors } from '../../src/theme/colors';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { HeroIllustration } from '../../src/components/icons';
+import { useOnboardingStore } from '../../src/store/onboardingStore';
 
 export default function Welcome() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const fetchQuestions = useOnboardingStore((s) => s.fetchQuestions);
+
+  // Prefetch questions while user sees the welcome screen
+  useEffect(() => {
+    fetchQuestions();
+  }, []);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 }]}>
@@ -27,7 +34,7 @@ export default function Welcome() {
         </Animated.Text>
       </View>
       <View style={styles.footer}>
-        <PrimaryButton label="Get started" onPress={() => router.push('/onboarding/goals')} />
+        <PrimaryButton label="Get started" onPress={() => router.push('/onboarding/questions')} />
       </View>
     </View>
   );
