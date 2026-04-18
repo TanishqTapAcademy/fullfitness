@@ -1,10 +1,66 @@
 import { useState, useEffect } from "react";
-import { Heart, Star, Flame, Zap, Home, User, Eye, Lock, Sun, Moon, Search, Plus, Minus, X, Check, Copy, Download, ChevronUp, ChevronDown, Circle, Clock, Calendar, Image, ArrowUpDown, Activity, Target, Save, Loader2, Dumbbell, Brain } from "lucide-react";
+import {
+  Heart, Star, Flame, Zap, Home, User, Eye, Lock, Sun, Moon, Search, Plus, Minus, X, Check, Copy, Download,
+  ChevronUp, ChevronDown, Circle, Clock, Calendar, Image, ArrowUpDown, Activity, Target, Save, Loader2,
+  Dumbbell, Brain,
+  // Fitness & body
+  Footprints, PersonStanding, Bike, Timer, TimerReset, Gauge, TrendingUp, TrendingDown, BarChart3, Award,
+  Trophy, Medal, Crown, Siren, HeartPulse, ShieldCheck, ShieldPlus, Waves, Wind,
+  Mountain, MountainSnow, Compass, Map, MapPin, Navigation, Route,
+  // Food & nutrition
+  Apple, Beef, Egg, CupSoda, Coffee, Wine, Salad, Wheat, Cherry, Grape, Citrus, IceCream, Pizza,
+  Cookie, Cake, Sandwich, Soup, UtensilsCrossed, ChefHat, Vegan,
+  // Play & sport
+  Gamepad2, Volleyball, CircleDot, Sword, Swords, Flag, FlagTriangleRight,
+  Rocket, Sparkles, PartyPopper, Music, Headphones, Radio,
+  // Wellness & lifestyle
+  Bed, Sunrise, Sunset, CloudSun, Thermometer, Droplets, Droplet, Leaf, TreePine, Sprout, Flower2,
+  BatteryCharging, BatteryFull, Plug, Power, RefreshCw, RotateCcw, Repeat, Infinity,
+  // Body & health
+  Stethoscope, Pill, Syringe, Bandage, Bone, Scan, ScanLine, Fingerprint, Hand, ThumbsUp, ThumbsDown,
+  Smile, Frown, Meh, Laugh, AlertTriangle, AlertCircle, Info, HelpCircle,
+  // Progress & achievement
+  ChartBar, ChartLine, ChartPie, ArrowUp, ArrowDown, ArrowRight, ArrowLeft,
+  ChevronsUp, Maximize, Minimize, Scale, Ruler, Hash, Percent, CircleCheckBig,
+  // Time & schedule
+  CalendarDays, CalendarCheck, AlarmClock, Hourglass, Watch, History,
+  // Social & communication
+  Users, UserPlus, MessageCircle, MessageSquare, Bell, BellRing, Share2, Send, Globe,
+  // Misc useful
+  Settings, Sliders, Filter, Bookmark, BookOpen, Pencil, Scissors, Wrench, Hammer, Lightbulb, Cog
+} from "lucide-react";
 import { fetchQuestions, createQuestion, updateQuestion, deleteQuestion } from "../api/questions";
 
 /* ── Icons ── */
 const ICONS = [
-  ["activity",Activity,"sport fitness"],["arrow-up-down",ArrowUpDown,"sort reorder"],["brain",Brain,"mental clarity think"],["calendar",Calendar,"date schedule"],["check",Check,"done yes"],["circle",Circle,"shape radio"],["clock",Clock,"time"],["dumbbell",Dumbbell,"gym weight muscle"],["eye",Eye,"view visible"],["flame",Flame,"fire burn calories hot"],["heart",Heart,"love health cardio"],["home",Home,"house"],["image",Image,"photo picture"],["lock",Lock,"security password"],["minus",Minus,"subtract remove"],["moon",Moon,"night sleep dark"],["plus",Plus,"add create"],["search",Search,"find look"],["star",Star,"favorite rating"],["sun",Sun,"day bright light"],["target",Target,"goal aim focus"],["user",User,"person profile"],["x",X,"close cancel"],["zap",Zap,"energy power lightning bolt"]
+  // Fitness & exercise
+  ["activity",Activity,"sport fitness cardio"],["dumbbell",Dumbbell,"gym weight muscle lift"],["footprints",Footprints,"walk steps run"],["person-standing",PersonStanding,"body pose stand"],["bike",Bike,"cycle cardio ride"],["timer",Timer,"stopwatch interval"],["timer-reset",TimerReset,"rest reset break"],["gauge",Gauge,"intensity speed meter"],["trending-up",TrendingUp,"progress increase gain"],["trending-down",TrendingDown,"decrease loss cut"],["bar-chart-3",BarChart3,"stats progress chart"],["waves",Waves,"swim water pool"],["wind",Wind,"breath breathe cardio"],["mountain",Mountain,"climb hike outdoor"],["mountain-snow",MountainSnow,"adventure winter outdoor"],["scale",Scale,"weight measure body"],["ruler",Ruler,"height measure length"],
+  // Achievement & motivation
+  ["award",Award,"achievement badge reward"],["trophy",Trophy,"win champion first"],["medal",Medal,"prize podium finish"],["crown",Crown,"king best top"],["star",Star,"favorite rating best"],["target",Target,"goal aim focus"],["flag",Flag,"finish milestone checkpoint"],["flag-triangle-right",FlagTriangleRight,"start race begin"],["rocket",Rocket,"boost launch fast"],["sparkles",Sparkles,"new magic special"],["party-popper",PartyPopper,"celebrate congrats done"],["circle-check-big",CircleCheckBig,"complete done success"],
+  // Health & body
+  ["heart",Heart,"love health cardio"],["heart-pulse",HeartPulse,"heartbeat pulse bpm cardio"],["brain",Brain,"mental clarity think focus"],["bone",Bone,"skeleton joints body"],["stethoscope",Stethoscope,"health doctor medical"],["pill",Pill,"supplement medicine vitamin"],["syringe",Syringe,"injection vaccine medical"],["bandage",Bandage,"injury recovery heal"],["shield-check",ShieldCheck,"protect immune safe"],["shield-plus",ShieldPlus,"health boost immune"],["thermometer",Thermometer,"temperature fever body"],["scan",Scan,"body scan measure"],["scan-line",ScanLine,"track measure analyze"],["fingerprint",Fingerprint,"identity unique personal"],
+  // Food & nutrition
+  ["apple",Apple,"fruit food healthy snack"],["beef",Beef,"meat protein steak"],["egg",Egg,"protein breakfast food"],["cup-soda",CupSoda,"drink beverage soda"],["coffee",Coffee,"caffeine energy morning"],["wine",Wine,"alcohol drink glass"],["salad",Salad,"vegetable healthy green"],["wheat",Wheat,"grain carb bread"],["cherry",Cherry,"fruit berry snack"],["grape",Grape,"fruit berry wine"],["citrus",Citrus,"orange lemon vitamin"],["ice-cream",IceCream,"dessert sweet treat"],["pizza",Pizza,"junk food cheat"],["cookie",Cookie,"snack sweet treat"],["cake",Cake,"dessert birthday sweet"],["sandwich",Sandwich,"meal lunch bread"],["soup",Soup,"meal warm bowl"],["utensils-crossed",UtensilsCrossed,"eat meal dining"],["chef-hat",ChefHat,"cook kitchen meal prep"],["vegan",Vegan,"plant based vegetarian"],
+  // Play & sport
+  ["gamepad-2",Gamepad2,"game play fun"],["volleyball",Volleyball,"sport ball team"],["circle-dot",CircleDot,"bullseye aim precision"],["sword",Sword,"fight combat martial"],["swords",Swords,"battle compete versus"],
+  // Wellness & lifestyle
+  ["sun",Sun,"day bright light morning"],["moon",Moon,"night sleep dark rest"],["sunrise",Sunrise,"morning wake early"],["sunset",Sunset,"evening wind down"],["cloud-sun",CloudSun,"weather outdoor day"],["bed",Bed,"sleep rest recovery night"],["leaf",Leaf,"nature organic natural"],["tree-pine",TreePine,"nature outdoor forest"],["sprout",Sprout,"growth new begin"],["flower-2",Flower2,"bloom nature beauty"],["droplets",Droplets,"water hydration sweat"],["droplet",Droplet,"water hydration single"],
+  // Energy & power
+  ["zap",Zap,"energy power lightning bolt"],["flame",Flame,"fire burn calories hot"],["battery-charging",BatteryCharging,"energy charge recharge"],["battery-full",BatteryFull,"full energy charged"],["plug",Plug,"connect power charge"],["power",Power,"on off switch"],["infinity",Infinity,"unlimited endless forever"],
+  // Progress & data
+  ["chart-bar",ChartBar,"stats data analytics"],["chart-line",ChartLine,"trend progress graph"],["chart-pie",ChartPie,"breakdown ratio split"],["arrow-up",ArrowUp,"increase up grow"],["arrow-down",ArrowDown,"decrease down reduce"],["arrow-right",ArrowRight,"next forward go"],["chevrons-up",ChevronsUp,"level up boost"],["percent",Percent,"percentage ratio discount"],["hash",Hash,"number count tag"],
+  // Time & schedule
+  ["clock",Clock,"time hour minute"],["calendar",Calendar,"date schedule plan"],["calendar-days",CalendarDays,"week plan schedule"],["calendar-check",CalendarCheck,"booked confirmed done"],["alarm-clock",AlarmClock,"wake alarm reminder"],["hourglass",Hourglass,"wait time duration"],["watch",Watch,"time wrist fitness"],["history",History,"past previous undo"],
+  // Navigation & location
+  ["compass",Compass,"direction explore navigate"],["map",Map,"location route plan"],["map-pin",MapPin,"location place gym"],["navigation",Navigation,"direction go navigate"],["route",Route,"path journey plan"],["home",Home,"house base main"],
+  // Social & people
+  ["user",User,"person profile account"],["users",Users,"group team community"],["user-plus",UserPlus,"add friend invite"],["message-circle",MessageCircle,"chat talk coach"],["message-square",MessageSquare,"comment feedback text"],["bell",Bell,"notification alert remind"],["bell-ring",BellRing,"alarm notification active"],["share-2",Share2,"share social send"],["send",Send,"submit share deliver"],["globe",Globe,"world global online"],["thumbs-up",ThumbsUp,"like good approve yes"],["thumbs-down",ThumbsDown,"dislike bad reject no"],["hand",Hand,"stop wave palm"],
+  // Mood & expression
+  ["smile",Smile,"happy good mood"],["frown",Frown,"sad unhappy mood"],["meh",Meh,"neutral okay mood"],["laugh",Laugh,"joy happy fun"],
+  // Tools & settings
+  ["settings",Settings,"config gear preferences"],["sliders",Sliders,"adjust customize control"],["filter",Filter,"sort narrow refine"],["bookmark",Bookmark,"save favorite later"],["book-open",BookOpen,"read learn guide"],["pencil",Pencil,"edit write note"],["lightbulb",Lightbulb,"idea tip hint"],["wrench",Wrench,"fix tool repair"],
+  // Utility (used by UI but also available)
+  ["eye",Eye,"view visible watch"],["lock",Lock,"security password private"],["image",Image,"photo picture media"],["check",Check,"done yes confirm"],["circle",Circle,"shape radio empty"],["arrow-up-down",ArrowUpDown,"sort reorder swap"],["search",Search,"find look query"],["plus",Plus,"add create new"],["minus",Minus,"subtract remove less"],["x",X,"close cancel delete"],["info",Info,"information help about"],["help-circle",HelpCircle,"question help support"],["alert-triangle",AlertTriangle,"warning caution danger"],["alert-circle",AlertCircle,"error problem issue"],["refresh-cw",RefreshCw,"reload refresh sync"],["rotate-ccw",RotateCcw,"undo back reverse"],["repeat",Repeat,"loop again cycle"],["copy",Copy,"duplicate clone"],["scissors",Scissors,"cut trim clip"],["maximize",Maximize,"expand fullscreen bigger"],["minimize",Minimize,"shrink smaller compact"],
 ].map(([k,c,t])=>({key:k,comp:c,tags:t}));
 
 const getIC=k=>ICONS.find(i=>i.key===k)?.comp||null;
