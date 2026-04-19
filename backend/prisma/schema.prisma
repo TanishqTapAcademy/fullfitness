@@ -29,10 +29,24 @@ model Question {
 
 model Response {
   id         String   @id @default(uuid())
-  device_id  String   @unique
+  device_id  String?  @unique
+  user_id    String?  @unique
   answers    Json
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   @@map("responses")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  supabase_id  String   @unique
+  email        String?
+  display_name String?
+  avatar_url   String?
+  role         String   @default("user")
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("users")
 }

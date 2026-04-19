@@ -1,11 +1,34 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { colors } from '../src/theme/colors';
+import { useAuthStore } from '../src/store/authStore';
+import { supabase } from '../src/services/supabase';
 
 export default function RootLayout() {
+  const initialized = useAuthStore((s) => s.initialized);
+
+  useEffect(() => {
+    useAuthStore.getState().initialize();
+
+    // Refresh token when app comes to foreground
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  if (!initialized) {
+    return <View style={{ flex: 1, backgroundColor: colors.DARK }} />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.DARK }}>
       <SafeAreaProvider>

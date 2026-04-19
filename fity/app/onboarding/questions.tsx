@@ -36,13 +36,13 @@ export default function DynamicQuestions() {
 
   if (!question) {
     // All questions done
-    router.replace('/onboarding/auth');
+    router.replace('/onboarding/chat');
     return null;
   }
 
   const handleContinue = () => {
     if (isLast) {
-      router.push('/onboarding/auth');
+      router.push('/onboarding/chat');
     } else {
       nextQuestion();
     }

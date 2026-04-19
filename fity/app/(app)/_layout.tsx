@@ -1,15 +1,16 @@
 import React from 'react';
-import { Stack } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 import { colors } from '../../src/theme/colors';
+import { useAuthStore } from '../../src/store/authStore';
 
-/**
- * Post-onboarding shell. Flat Stack — no bottom tab bar.
- *   - home   → default entry after baseline
- *   - chat   → fullscreen coach (hosts the Trace corner button)
- *   - baseline → modal sheet
- *   - trace    → transparent modal, reachable only from chat
- */
 export default function AppLayout() {
+  const session = useAuthStore((s) => s.session);
+  const skippedAuth = useAuthStore((s) => s.skippedAuth);
+
+  if (!session && !skippedAuth) {
+    return <Redirect href="/onboarding/auth" />;
+  }
+
   return (
     <Stack
       screenOptions={{

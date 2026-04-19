@@ -1,4 +1,14 @@
+import { supabase } from './supabase';
+
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    return { Authorization: `Bearer ${session.access_token}` };
+  }
+  return {};
+}
 
 export interface BackendQuestion {
   id: string;
@@ -21,18 +31,41 @@ export const onboardingApi = {
   },
 
   saveResponse: async (deviceId: string, questionId: string, answer: any) => {
+    const headers = await authHeaders();
+    const { data: { session } } = await supabase.auth.getSession();
+
+    const body: Record<string, any> = { question_id: questionId, answer };
+    if (session?.user?.id) {
+      body.user_id = session.user.id;
+    } else {
+      body.device_id = deviceId;
+    }
+
     const res = await fetch(`${BASE_URL}/onboarding/responses`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: deviceId, question_id: questionId, answer }),
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error('Failed to save response');
     return res.json();
   },
 
   getResponses: async (deviceId: string) => {
-    const res = await fetch(`${BASE_URL}/onboarding/responses/${deviceId}`);
+    const { data: { session } } = await supabase.auth.getSession();
+    const identifier = session?.user?.id || deviceId;
+    const res = await fetch(`${BASE_URL}/onboarding/responses/${identifier}`);
     if (!res.ok) throw new Error('Failed to fetch responses');
+    return res.json();
+  },
+
+  syncUser: async (deviceId: string) => {
+    const headers = await authHeaders();
+    const res = await fetch(`${BASE_URL}/users/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+    if (!res.ok) throw new Error('Failed to sync user');
     return res.json();
   },
 };
