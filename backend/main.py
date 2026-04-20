@@ -9,6 +9,7 @@ from prisma import Prisma
 from routes.onboarding import router as onboarding_router
 from routes.admin import router as admin_router
 from routes.users import router as users_router
+from routes.admin_auth import router as auth_router
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ app.add_middleware(
 app.include_router(onboarding_router, prefix="/api/onboarding")
 app.include_router(admin_router, prefix="/api/admin")
 app.include_router(users_router, prefix="/api/users")
+app.include_router(auth_router, prefix="/api/auth")
 
 
 @app.get("/api/health")

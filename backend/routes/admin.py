@@ -1,8 +1,11 @@
+import asyncio
 from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from prisma import Json
 from pydantic import BaseModel
+
+from admin_auth import require_admin
 
 router = APIRouter()
 
@@ -46,7 +49,7 @@ class ReorderBody(BaseModel):
 
 
 @router.get("/questions")
-async def get_all_questions():
+async def get_all_questions(_=Depends(require_admin)):
     db = get_db()
     questions = await db.question.find_many(order={"order": "asc"})
     return {"questions": questions}
@@ -61,7 +64,7 @@ def _wrap_json_fields(data: dict) -> dict:
 
 
 @router.post("/questions")
-async def create_question(body: QuestionCreate):
+async def create_question(body: QuestionCreate, _=Depends(require_admin)):
     db = get_db()
     data = _wrap_json_fields(body.model_dump())
     question = await db.question.create(data=data)
@@ -69,7 +72,7 @@ async def create_question(body: QuestionCreate):
 
 
 @router.put("/questions/reorder")
-async def reorder_questions(body: ReorderBody):
+async def reorder_questions(body: ReorderBody, _=Depends(require_admin)):
     db = get_db()
     async with db.tx() as tx:
         for item in body.order:
@@ -81,7 +84,7 @@ async def reorder_questions(body: ReorderBody):
 
 
 @router.put("/questions/{question_id}")
-async def update_question(question_id: str, body: QuestionUpdate):
+async def update_question(question_id: str, body: QuestionUpdate, _=Depends(require_admin)):
     db = get_db()
     data = _wrap_json_fields(body.model_dump(exclude_none=True))
     question = await db.question.update(
@@ -92,7 +95,7 @@ async def update_question(question_id: str, body: QuestionUpdate):
 
 
 @router.delete("/questions/{question_id}")
-async def delete_question(question_id: str):
+async def delete_question(question_id: str, _=Depends(require_admin)):
     db = get_db()
     question = await db.question.delete(
         where={"id": question_id},
@@ -101,12 +104,11 @@ async def delete_question(question_id: str):
 
 
 @router.get("/responses")
-async def get_response_analytics():
+async def get_response_analytics(_=Depends(require_admin)):
     db = get_db()
-    all_responses = await db.response.find_many()
-    questions = await db.question.find_many(
-        where={"is_active": True},
-        order={"order": "asc"},
+    all_responses, questions = await asyncio.gather(
+        db.response.find_many(),
+        db.question.find_many(where={"is_active": True}, order={"order": "asc"}),
     )
     total_questions = len(questions)
 

@@ -1,5 +1,6 @@
 import asyncio
 
+import bcrypt
 from dotenv import load_dotenv
 from prisma import Json, Prisma
 
@@ -91,13 +92,27 @@ async def main():
     for q in SEED_QUESTIONS:
         data = {k: v for k, v in q.items()}
         for key in ("options", "config", "coach_response"):
-            if key in data and data[key] is not None:
-                data[key] = Json(data[key])
+            if key in data:
+                if data[key] is not None:
+                    data[key] = Json(data[key])
+                else:
+                    del data[key]
         await db.question.upsert(
             where={"step_id": q["step_id"]},
             data={"create": data, "update": data},
         )
         print(f"  ✓ {q['step_id']}")
+
+    # Seed default admin user
+    print("Seeding admin user...")
+    admin_email = "admin@fitness.com"
+    existing = await db.adminuser.find_unique(where={"email": admin_email})
+    if not existing:
+        hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+        await db.adminuser.create(data={"email": admin_email, "password": hashed})
+        print(f"  ✓ Created admin: {admin_email} / admin123")
+    else:
+        print(f"  ✓ Admin already exists: {admin_email}")
 
     print("Seed complete!")
     await db.disconnect()

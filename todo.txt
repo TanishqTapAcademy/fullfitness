@@ -1,9 +1,8 @@
 todo
-- onboarding system comes from the backend like the quizebuilder simplified and website for the admin to create rthe onboarding clcik or drag and drop
-- login system cleark
 - that modification add to the chat system 
 - list the ferature required in the treas and the home page  which will come from chat tot he data directly (research )
 - use mem0 and graph clean  with understand how it work 
 - add one signal 
 - adpty for the payment 
 - post hog also has to be added 
+-loading add lootie in app and website 
