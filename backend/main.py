@@ -19,6 +19,12 @@ db = Prisma()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
+    # Pre-warm JWKS cache so first auth request is fast
+    try:
+        from auth import _get_jwks
+        await _get_jwks()
+    except Exception:
+        pass  # Non-critical — will fetch on first request
     yield
     await db.disconnect()
 

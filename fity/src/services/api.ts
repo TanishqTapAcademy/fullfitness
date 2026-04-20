@@ -58,14 +58,26 @@ export const onboardingApi = {
     return res.json();
   },
 
-  syncUser: async (deviceId: string) => {
+  syncUser: async (
+    deviceId: string,
+    opts?: { display_name?: string; avatar?: string }
+  ): Promise<{ success: boolean; is_new_user: boolean; user: any }> => {
     const headers = await authHeaders();
     const res = await fetch(`${BASE_URL}/users/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({ device_id: deviceId }),
+      body: JSON.stringify({ device_id: deviceId, ...opts }),
     });
     if (!res.ok) throw new Error('Failed to sync user');
+    return res.json();
+  },
+
+  getMe: async (): Promise<{ user: any }> => {
+    const headers = await authHeaders();
+    const res = await fetch(`${BASE_URL}/users/me`, {
+      headers: { ...headers },
+    });
+    if (!res.ok) throw new Error('Failed to fetch user');
     return res.json();
   },
 };

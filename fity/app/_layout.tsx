@@ -6,13 +6,31 @@ import { StatusBar } from 'expo-status-bar';
 import { AppState, View } from 'react-native';
 import { colors } from '../src/theme/colors';
 import { useAuthStore } from '../src/store/authStore';
+import { onboardingApi } from '../src/services/api';
 import { supabase } from '../src/services/supabase';
 
 export default function RootLayout() {
   const initialized = useAuthStore((s) => s.initialized);
 
   useEffect(() => {
-    useAuthStore.getState().initialize();
+    const boot = async () => {
+      await useAuthStore.getState().initialize();
+
+      // If user has an active session, load their profile
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          const { user } = await onboardingApi.getMe();
+          if (user) {
+            useAuthStore.getState().setProfile(user);
+            useAuthStore.getState().setIsNewUser(!user.display_name);
+          }
+        } catch {
+          // Non-critical
+        }
+      }
+    };
+    boot();
 
     // Refresh token when app comes to foreground
     const sub = AppState.addEventListener('change', (state) => {

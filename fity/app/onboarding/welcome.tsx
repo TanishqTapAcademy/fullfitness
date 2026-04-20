@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,16 @@ export default function Welcome() {
   return (
     <View style={[styles.root, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 }]}>
       <StatusBar style="light" />
+
+      {/* Sign-in shortcut — top right */}
+      <Pressable
+        onPress={() => router.push('/onboarding/auth')}
+        style={[styles.signInBtn, { top: insets.top + 16 }]}
+        hitSlop={12}
+      >
+        <Text style={styles.signInText}>Sign in</Text>
+      </Pressable>
+
       <View style={styles.center}>
         <Animated.View entering={FadeIn.duration(600)}>
           <Image
@@ -46,6 +56,22 @@ export default function Welcome() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.DARK, paddingHorizontal: 20 },
+  signInBtn: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.GRAY,
+    backgroundColor: colors.DARK3,
+  },
+  signInText: {
+    color: colors.MUTED,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 },
   title: {
     color: colors.WHITE,

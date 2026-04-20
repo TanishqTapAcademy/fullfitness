@@ -55,7 +55,7 @@ const AuthButton: React.FC<{
 
 export default function Auth() {
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, signInWithApple, signInWithGoogle, skipAuth, loading } =
+  const { signInWithEmail, signUpWithEmail, signInWithApple, signInWithGoogle, skipAuth, loading, setIsNewUser, setProfile } =
     useAuthStore();
 
   const [showEmail, setShowEmail] = useState(false);
@@ -63,16 +63,27 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(true);
 
-  const next = () => router.push('/onboarding/notifications');
-
   const syncAndProceed = async () => {
-    try {
-      const deviceId = await getOrCreateDeviceId();
-      await onboardingApi.syncUser(deviceId);
-    } catch {
-      // Non-critical — proceed even if sync fails
-    }
-    next();
+    // Navigate to profile immediately — don't block on the API call.
+    // The sync runs concurrently; if user turns out to be existing,
+    // we redirect to Home from profile via store check.
+    router.push('/onboarding/profile');
+
+    // Fire-and-forget sync in background
+    getOrCreateDeviceId()
+      .then((deviceId) => onboardingApi.syncUser(deviceId))
+      .then((result) => {
+        if (result.user) setProfile(result.user);
+        if (result.is_new_user === false) {
+          setIsNewUser(false);
+        } else {
+          setIsNewUser(true);
+        }
+      })
+      .catch(() => {
+        // Sync failed — stay on profile (treat as new)
+        setIsNewUser(true);
+      });
   };
 
   const handleEmail = async () => {
@@ -111,7 +122,7 @@ export default function Auth() {
 
   const handleSkip = () => {
     skipAuth();
-    next();
+    router.push('/onboarding/notifications');
   };
 
   return (

@@ -16,6 +16,8 @@ def get_db():
 
 class UserSyncRequest(BaseModel):
     device_id: Optional[str] = None
+    display_name: Optional[str] = None
+    avatar: Optional[str] = None
 
 
 @router.post("/sync")
@@ -25,21 +27,36 @@ async def sync_user(body: UserSyncRequest, user: dict = Depends(require_auth)):
     supabase_id = user["sub"]
     email = user.get("email")
 
-    # Upsert user
+    # Check if user already exists with a completed profile
     existing = await db.user.find_unique(where={"supabase_id": supabase_id})
+    is_new_user = True
+
     if existing:
+        # User exists — check if profile is already set up
+        if existing.display_name:
+            is_new_user = False
+        # Update email, and name/avatar only if provided (for new profile setup)
+        update_data: dict = {"email": email}
+        if body.display_name:
+            update_data["display_name"] = body.display_name
+        if body.avatar:
+            update_data["avatar"] = body.avatar
         await db.user.update(
             where={"supabase_id": supabase_id},
-            data={"email": email},
+            data=update_data,
         )
     else:
-        await db.user.create(
-            data={
-                "supabase_id": supabase_id,
-                "email": email,
-                "role": "user",
-            }
-        )
+        # Brand new user
+        create_data: dict = {
+            "supabase_id": supabase_id,
+            "email": email,
+            "role": "user",
+        }
+        if body.display_name:
+            create_data["display_name"] = body.display_name
+        if body.avatar:
+            create_data["avatar"] = body.avatar
+        await db.user.create(data=create_data)
 
     # Migrate device_id responses to user_id if device_id provided
     if body.device_id:
@@ -63,7 +80,21 @@ async def sync_user(body: UserSyncRequest, user: dict = Depends(require_auth)):
             )
             await db.response.delete(where={"id": device_response.id})
 
-    return {"success": True}
+    # Fetch updated user to return
+    updated_user = await db.user.find_unique(where={"supabase_id": supabase_id})
+
+    return {
+        "success": True,
+        "is_new_user": is_new_user,
+        "user": {
+            "id": updated_user.id,
+            "supabase_id": updated_user.supabase_id,
+            "email": updated_user.email,
+            "display_name": updated_user.display_name,
+            "avatar": updated_user.avatar,
+            "role": updated_user.role,
+        } if updated_user else None,
+    }
 
 
 @router.get("/me")
@@ -79,6 +110,7 @@ async def get_me(user: dict = Depends(require_auth)):
             "supabase_id": profile.supabase_id,
             "email": profile.email,
             "display_name": profile.display_name,
+            "avatar": profile.avatar,
             "role": profile.role,
         }
     }
