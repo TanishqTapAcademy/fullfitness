@@ -97,8 +97,17 @@ async def get_full_context(db: Prisma, user_id: str, query: str) -> tuple[str, s
     summary_task = get_recent_summary_for_user(db, user)
     profile, summary = await asyncio.gather(profile_task, summary_task)
 
-    # Mem0 search (sync, so run it after async work)
-    memories = search_memories(user_id, query) if query else "No memories."
+    # Mem0 search — run in thread with 2s timeout so it doesn't stall the response
+    if query:
+        try:
+            memories = await asyncio.wait_for(
+                asyncio.to_thread(search_memories, user_id, query),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            memories = "No memories (timed out)."
+    else:
+        memories = "No memories."
 
     return profile, summary, memories, user.id
 
@@ -109,7 +118,7 @@ def search_memories(user_id: str, query: str) -> str:
         return "Memory not configured."
 
     try:
-        results = mem0.search(query, user_id=user_id, limit=10)
+        results = mem0.search(query, filters={"user_id": user_id}, limit=10)
         if not results or not results.get("results"):
             return "No relevant memories."
 
@@ -117,7 +126,8 @@ def search_memories(user_id: str, query: str) -> str:
         for r in results["results"]:
             lines.append(f"- {r.get('memory', r.get('text', ''))}")
         return "\n".join(lines)
-    except Exception:
+    except Exception as e:
+        print(f"[mem0] search error: {e}")
         return "Memory search unavailable."
 
 
@@ -128,5 +138,5 @@ def save_memory(user_id: str, messages: list[dict]) -> None:
 
     try:
         mem0.add(messages, user_id=user_id)
-    except Exception:
-        pass  # Non-critical
+    except Exception as e:
+        print(f"[mem0] save error: {e}")

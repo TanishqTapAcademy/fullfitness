@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
+from prisma import Json
 from auth import require_auth
 from posthog_client import capture as posthog_capture
 
@@ -31,9 +32,9 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
     if db_user:
         await db.chatmessage.create(
             data={
-                "user_id": db_user.id,
                 "role": "user",
                 "content": body.message,
+                "user": {"connect": {"id": db_user.id}},
             }
         )
 
@@ -84,14 +85,14 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
 
         # Save assistant message to DB
         if db_user and full_response:
-            await db.chatmessage.create(
-                data={
-                    "user_id": db_user.id,
+            create_data = {
                     "role": "assistant",
                     "content": full_response,
-                    "metadata": json.dumps({"tool_logs": tool_logs}) if tool_logs else None,
+                    "user": {"connect": {"id": db_user.id}},
                 }
-            )
+            if tool_logs:
+                create_data["metadata"] = Json(json.dumps({"tool_logs": tool_logs}))
+            await db.chatmessage.create(data=create_data)
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
@@ -155,38 +156,52 @@ async def chat_history(
 
 @router.get("/context")
 async def chat_context(user: dict = Depends(require_auth)):
-    """Get a proactive opener message based on time of day and recent activity."""
+    """SSE stream: LLM-generated opener based on user profile, time, and recent activity."""
     from main import db
-    from agent.context import get_recent_summary_for_user
+    from agent.context import get_recent_summary_for_user, get_user_profile
+    from agent.graph import get_llm
 
     user_id = user.get("sub", "")
     db_user = await db.user.find_first(where={"supabase_id": user_id})
-    if not db_user:
-        return {"opener": "Hey. What's on the menu today?"}
 
-    # Pass db_user directly to avoid a second user lookup
-    summary = await get_recent_summary_for_user(db, db_user)
     hour = datetime.now().hour
+    time_of_day = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
 
-    if hour < 12:
-        time_context = "morning"
-    elif hour < 17:
-        time_context = "afternoon"
+    if db_user:
+        profile = await get_user_profile(db, user_id)
+        summary = await get_recent_summary_for_user(db, db_user)
+        msg_count = await db.chatmessage.count(where={"user_id": db_user.id})
+        is_first = msg_count == 0
     else:
-        time_context = "evening"
+        profile = "New user"
+        summary = "No activity yet."
+        is_first = True
 
-    # Simple rule-based opener (avoids extra LLM call for speed)
-    if "No activity" in summary:
-        openers = {
-            "morning": "Morning. What's the plan today?",
-            "afternoon": "Afternoon check-in. Done anything yet?",
-            "evening": "Evening. How'd today go?",
-        }
-    else:
-        openers = {
-            "morning": "Back at it. What are we hitting today?",
-            "afternoon": "How's the day going? Log anything new?",
-            "evening": "Good session today? Let's recap.",
-        }
+    first_ctx = " This is their FIRST time chatting — introduce yourself briefly as their coach." if is_first else ""
+    prompt = (
+        f"You are Coach — a direct, warm fitness coach in the Fity app. "
+        f"It's {time_of_day}.{first_ctx} "
+        f"User: {profile}. Recent 7 days: {summary}. "
+        f"Write a single short opener message (1-2 sentences). No emojis. Sound like a real coach texting."
+    )
 
-    return {"opener": openers.get(time_context, "Hey. What's happening?")}
+    llm = get_llm()
+
+    async def event_stream():
+        try:
+            async for chunk in llm.astream(prompt):
+                if chunk.content:
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk.content})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

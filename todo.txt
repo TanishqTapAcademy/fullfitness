@@ -574,4 +574,17 @@ relationship mapping later. That's your winning combo.
  4. Home: After logging → verify real streak, plan, insight, recent logs
  5. Trace: After days of data → verify heatmap, PRs, line graphs with real data
  6. Push: Don't log food by 2pm → verify OneSignal notification → tap → chat opens
- 
+
+
+
+
+
+ todo:
+[] chat repsont and seletion option in varities
+[] image imput and store 
+[] chat to db update 
+[] verfy post hog 
+[] verfy memory(mem0)
+[] admin side update ?
+[] onboardig has to connected to a user ? 
+[] adapity  for the payment ?

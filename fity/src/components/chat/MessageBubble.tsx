@@ -5,7 +5,6 @@ import { colors } from '../../theme/colors';
 import { CoachAvatarIcon } from '../icons';
 import { TypingIndicator } from './TypingIndicator';
 import { DURATION, EASING_OUT_CUBIC } from '../../theme/motion';
-import { useTypewriter } from '../../hooks/useTypewriter';
 
 interface Props {
   from: 'coach' | 'user';
@@ -15,6 +14,8 @@ interface Props {
   compact?: boolean;
   /** When true, text reveals character-by-character on mount. */
   typewriter?: boolean;
+  /** When true, skip the enter animation (used for streaming messages). */
+  skipEnterAnimation?: boolean;
 }
 
 /**
@@ -22,14 +23,9 @@ interface Props {
  * background) or the user variant (lime, right-aligned). Typing state shows
  * the shared TypingIndicator instead of text.
  */
-export const MessageBubble: React.FC<Props> = ({ from, text, typing, compact, typewriter }) => {
+export const MessageBubble: React.FC<Props> = ({ from, text, typing, compact, typewriter, skipEnterAnimation }) => {
   const isCoach = from === 'coach';
-  const { visible } = useTypewriter({
-    text: text ?? '',
-    speed: 22,
-    enabled: !!typewriter && !typing && !!text,
-  });
-  const rendered = typewriter && !typing ? visible : text;
+  const rendered = text;
 
   const bubbleBody = typing ? (
     <TypingIndicator />
@@ -37,15 +33,18 @@ export const MessageBubble: React.FC<Props> = ({ from, text, typing, compact, ty
     <Text style={isCoach ? styles.coachText : styles.userText}>{rendered}</Text>
   );
 
+  const Container = skipEnterAnimation ? View : Animated.View;
+  const enteringProp = skipEnterAnimation ? {} : { entering: FadeInUp.duration(DURATION.fast).easing(EASING_OUT_CUBIC) };
+
   return (
-    <Animated.View
-      entering={FadeInUp.duration(DURATION.fast).easing(EASING_OUT_CUBIC)}
+    <Container
+      {...enteringProp}
       style={[styles.row, isCoach ? styles.rowCoach : styles.rowUser]}
     >
       {isCoach && !compact ? <CoachAvatarIcon size={32} /> : null}
       {isCoach && compact ? <View style={styles.avatarSpacer} /> : null}
       <View style={[styles.bubble, isCoach ? styles.coach : styles.user]}>{bubbleBody}</View>
-    </Animated.View>
+    </Container>
   );
 };
 

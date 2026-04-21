@@ -24,6 +24,7 @@ export interface ExtractionLog {
 interface ChatState {
   messages: Msg[];
   didSeeIntro: boolean;
+  openerShownThisSession: boolean;
   loading: boolean;
   streaming: boolean;
   streamingMsgId: string | null;
@@ -31,6 +32,7 @@ interface ChatState {
 
   push: (m: Omit<Msg, 'ts'> & { ts?: number }) => void;
   markIntroSeen: () => void;
+  markOpenerShown: () => void;
 
   /** Start a new streaming assistant message */
   startStream: (msgId: string) => void;
@@ -52,6 +54,7 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   didSeeIntro: false,
+  openerShownThisSession: false,
   loading: false,
   streaming: false,
   streamingMsgId: null,
@@ -63,6 +66,7 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
 
   markIntroSeen: () => set({ didSeeIntro: true }),
+  markOpenerShown: () => set({ openerShownThisSession: true }),
 
   startStream: (msgId) =>
     set((s) => ({

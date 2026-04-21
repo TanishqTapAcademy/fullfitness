@@ -19,14 +19,14 @@ import { useAuthStore } from '../../src/store/authStore';
 import { useProgressStore } from '../../src/store/progressStore';
 import { FIRST_MESSAGES } from '../../src/data/chatScripts';
 import { DURATION, SPRING_SOFT } from '../../src/theme/motion';
-import { sendMessage, getHistory, getProactiveMessage, type SSEEvent } from '../../src/services/chatApi';
+import { sendMessage, getHistory, streamOpener, type SSEEvent } from '../../src/services/chatApi';
 import { trackEvent } from '../../src/services/posthog';
 
 export default function Chat() {
   const router = useRouter();
   const {
-    messages, didSeeIntro, streaming,
-    push, markIntroSeen, startStream, appendToStream, finishStream,
+    messages, didSeeIntro, streaming, openerShownThisSession,
+    push, markIntroSeen, markOpenerShown, startStream, appendToStream, finishStream,
     addExtraction, loadHistory, setLoading,
   } = useChatStore();
   const session = useAuthStore((s) => s.session);
@@ -63,12 +63,32 @@ export default function Chat() {
           }));
           loadHistory(mapped);
           markIntroSeen();
-        } else {
-          // No history — get proactive opener
-          const opener = await getProactiveMessage();
-          if (opener) {
-            push({ id: `opener-${Date.now()}`, from: 'coach', text: opener });
-            markIntroSeen();
+        }
+
+        // Stream LLM opener only once per app session (not on tab switches)
+        if (!openerShownThisSession) {
+          markOpenerShown();
+          const openerId = `opener-${Date.now()}`;
+          startStream(openerId);
+          markIntroSeen();
+          try {
+            await streamOpener((event: SSEEvent) => {
+              switch (event.type) {
+                case 'token':
+                  if (event.content) appendToStream(openerId, event.content);
+                  break;
+                case 'done':
+                  finishStream(openerId);
+                  break;
+                case 'error':
+                  appendToStream(openerId, event.message || 'Hey. What are we working on today?');
+                  finishStream(openerId);
+                  break;
+              }
+            });
+          } catch {
+            appendToStream(openerId, 'Hey. What are we working on today?');
+            finishStream(openerId);
           }
         }
       } catch {
@@ -197,7 +217,7 @@ export default function Chat() {
                 <MessageBubble
                   from={m.from}
                   text={m.text}
-                  typewriter={m.from === 'coach' && !m.streaming}
+                  skipEnterAnimation={m.streaming}
                 />
                 {m.cta ? (
                   <InlineActionCard

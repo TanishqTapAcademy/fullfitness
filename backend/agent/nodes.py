@@ -1,3 +1,5 @@
+import asyncio
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent.state import AgentState
@@ -49,7 +51,7 @@ async def call_model(state: AgentState) -> dict:
 
 
 async def save_memory_node(state: AgentState) -> dict:
-    """Post-LLM node: save the exchange to Mem0 for long-term memory."""
+    """Post-LLM node: fire-and-forget save to Mem0 so it doesn't block the stream."""
     user_id = state["user_id"]
 
     last_user = ""
@@ -63,7 +65,10 @@ async def save_memory_node(state: AgentState) -> dict:
             break
 
     if last_user and last_assistant:
-        save_memory(
+        # Run in background thread — don't block the stream
+        asyncio.get_event_loop().run_in_executor(
+            None,
+            save_memory,
             user_id,
             [
                 {"role": "user", "content": last_user},

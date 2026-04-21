@@ -13,6 +13,6 @@ posthog = Posthog(POSTHOG_API_KEY, host=POSTHOG_HOST) if POSTHOG_API_KEY else No
 def capture(user_id: str, event: str, properties: dict | None = None):
     if posthog:
         try:
-            posthog.capture(user_id, event, properties or {})
+            posthog.capture(event, distinct_id=user_id, properties=properties or {})
         except Exception:
             logger.debug("PostHog capture failed for %s", event, exc_info=True)

@@ -21,40 +21,56 @@ export async function sendMessage(
   const token = await getToken();
   if (!token) throw new Error('Not authenticated');
 
-  const res = await fetch(`${BASE_URL}/chat/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ message: text }),
-  });
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE_URL}/chat/stream`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.timeout = 30000;
 
-  if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
-  if (!res.body) throw new Error('No response body');
+    let lastIndex = 0;
+    let buffer = '';
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+    const parseChunk = (raw: string) => {
+      buffer += raw;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      try {
-        const event: SSEEvent = JSON.parse(line.slice(6));
-        onEvent(event);
-      } catch {
-        // skip malformed events
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event: SSEEvent = JSON.parse(line.slice(6));
+          onEvent(event);
+        } catch {
+          // skip malformed events
+        }
       }
-    }
-  }
+    };
+
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastIndex);
+      lastIndex = xhr.responseText.length;
+      if (newData) parseChunk(newData);
+    };
+
+    xhr.onload = () => {
+      // Parse any remaining buffered data
+      const remaining = xhr.responseText.slice(lastIndex);
+      if (remaining) parseChunk(remaining);
+      if (buffer.trim()) parseChunk(buffer + '\n');
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Chat failed: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Request timed out'));
+
+    xhr.send(JSON.stringify({ message: text }));
+  });
 }
 
 export interface ChatMessageRecord {
@@ -83,15 +99,53 @@ export async function getHistory(
   return res.json();
 }
 
-export async function getProactiveMessage(): Promise<string> {
+export async function streamOpener(
+  onEvent: (event: SSEEvent) => void,
+): Promise<void> {
   const token = await getToken();
-  if (!token) return '';
+  if (!token) return;
 
-  const res = await fetch(`${BASE_URL}/chat/context`, {
-    headers: { Authorization: `Bearer ${token}` },
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${BASE_URL}/chat/context`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.timeout = 15000;
+
+    let lastIndex = 0;
+    let buffer = '';
+
+    const parseChunk = (raw: string) => {
+      buffer += raw;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event: SSEEvent = JSON.parse(line.slice(6));
+          onEvent(event);
+        } catch {
+          // skip malformed events
+        }
+      }
+    };
+
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastIndex);
+      lastIndex = xhr.responseText.length;
+      if (newData) parseChunk(newData);
+    };
+
+    xhr.onload = () => {
+      const remaining = xhr.responseText.slice(lastIndex);
+      if (remaining) parseChunk(remaining);
+      if (buffer.trim()) parseChunk(buffer + '\n');
+      resolve();
+    };
+
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Request timed out'));
+
+    xhr.send();
   });
-
-  if (!res.ok) return '';
-  const data = await res.json();
-  return data.opener || '';
 }
