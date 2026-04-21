@@ -5,7 +5,7 @@ export default function Index() {
   const session = useAuthStore((s) => s.session);
 
   if (session) {
-    return <Redirect href="/(app)/home" />;
+    return <Redirect href="/(app)/chat" />;
   }
 
   return <Redirect href="/onboarding/welcome" />;

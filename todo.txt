@@ -6,3 +6,572 @@ todo
 - adpty for the payment 
 - post hog also has to be added 
 -loading add lootie in app and website 
+
+
+
+Right, so here's your roadmap: use LangGraph as your agent framework with Python, connect it 
+to MemZero for memory to track user history across conversations, and use a standard database 
+like Postgres or Supabase for storing user data and chat logs. Build your agent with nodes for 
+asking questions, fetching past conversations, generating food and fitness plans, and calling out 
+inconsistencies. Start simple—get the basic questioning and recommendations working in your five hours,
+then layer in the personality and lie detection. Skip Neo4j for now unless you really need complex 
+relationship mapping later. That's your winning combo.
+
+
+                                                                           
+⏺ Got it — you'll provide an OpenAI API key for Mem0 embeddings. The plan is ready with everything covered:          
+                                                                                                                   
+  Summary of what's in the plan:                                                                                     
+                                                                                                                     
+  - LangGraph agent with a load_context → agent → tools → save_memory graph flow                                     
+  - Mem0 using your Supabase pgvector for long-term memory (remembers user preferences, history, patterns across   
+  sessions)                                                                                                          
+  - OpenRouter as the LLM provider (model-agnostic, using ChatOpenAI with custom base_url)                           
+  - 30+ activity categories across exercise/nutrition/lifestyle domains with flexible JSON data schemas              
+  - Clean folder structure: agent/ (graph, state, nodes, prompts, tools/), memory/, routes/                          
+  - SSE streaming from LangGraph through FastAPI to the mobile app                                                   
+  - Home screen: real streak, LLM-generated plan + insight, recent logs card                                         
+  - Trace screen: real heatmap, PRs, strength trend + new line graphs with metric pills                              
+  - OneSignal push notifications for proactive coaching                                                              
+                                                                                                                     
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Ready to code?                                                                                                      
+                                                                                                                   
+ Here is Claude's plan:
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ LLM Coach Integration Plan — LangGraph + Mem0 + OpenRouter
+                                                                                                                     
+ Context                                                                                                           
+
+ The app has hardcoded fixtures, canned chat responses, no real data tracking. We're building an LLM-powered
+ proactive coach using LangGraph (agent framework), Mem0 (long-term memory via Supabase pgvector), and OpenRouter
+ (LLM provider). The coach extracts exercise, nutrition, and lifestyle data from natural conversation, stores it,
+ and feeds real data to Home + Trace screens.
+
+ ---
+ Architecture Overview
+
+ USER (mobile app)
+     │
+     │ SSE stream
+     ▼
+ FastAPI (/api/chat/stream)
+     │
+     ▼
+ ┌──────────────────────────────────────────┐
+ │           LANGGRAPH AGENT                │
+ │                                          │
+ │  ┌────────┐    ┌─────────┐              │
+ │  │  agent  │───>│  tools  │──┐           │
+ │  │  node   │<───│  node   │  │           │
+ │  └────────┘    └─────────┘  │           │
+ │       │                      │           │
+ │       │  Tools available:    │           │
+ │       │  • log_exercise      │           │
+ │       │  • log_nutrition     │           │
+ │       │  • log_lifestyle     │           │
+ │       │  • get_user_stats    │           │
+ │       │  • search_memory     │           │
+ │       ▼                      ▼           │
+ │  ┌─────────┐          ┌──────────┐      │
+ │  │OpenRouter│          │ Prisma   │      │
+ │  │  (LLM)  │          │   DB     │      │
+ │  └─────────┘          └──────────┘      │
+ │       │                                  │
+ │       ▼                                  │
+ │  ┌─────────┐                            │
+ │  │  Mem0    │ (Supabase pgvector)       │
+ │  │ Memory   │                            │
+ │  └─────────┘                            │
+ └──────────────────────────────────────────┘
+
+ ---
+ New Folder Structure (Clean, Modular)
+
+ backend/
+ ├── main.py                          # FastAPI app, router registration
+ ├── config.py                        # NEW: all env vars, settings
+ ├── requirements.txt                 # Updated with new deps
+ ├── .env                             # Updated with new keys
+ ├── prisma/
+ │   └── schema.prisma                # Updated: 4 new models
+ │
+ ├── agent/                           # NEW: LangGraph agent (the brain)
+ │   ├── __init__.py
+ │   ├── graph.py                     # StateGraph construction & compilation
+ │   ├── state.py                     # AgentState TypedDict
+ │   ├── nodes.py                     # agent node, memory node
+ │   ├── prompts.py                   # System prompts (coach personality)
+ │   ├── context.py                   # Context builder (profile + summary + mem0)
+ │   └── tools/                       # LangGraph tools (one file per domain)
+ │       ├── __init__.py              # Exports all tools list
+ │       ├── exercise.py              # log_exercise, get_exercise_history
+ │       ├── nutrition.py             # log_nutrition, get_nutrition_stats
+ │       ├── lifestyle.py             # log_lifestyle, get_lifestyle_stats
+ │       └── stats.py                 # get_user_stats, get_progress_summary
+ │
+ ├── memory/                          # NEW: Mem0 setup
+ │   ├── __init__.py
+ │   └── client.py                    # Mem0 Memory instance with Supabase config
+ │
+ ├── routes/                          # API routes (thin wrappers)
+ │   ├── onboarding.py                # Existing
+ │   ├── users.py                     # Existing
+ │   ├── admin.py                     # Existing
+ │   ├── admin_auth.py                # Existing
+ │   ├── chat.py                      # NEW: /api/chat/* (SSE stream + history)
+ │   ├── progress.py                  # NEW: /api/progress/* (Home + Trace data)
+ │   └── notifications.py             # NEW: /api/notifications/* (OneSignal)
+ │
+ ├── auth.py                          # Existing
+ ├── admin_auth.py                    # Existing
+ └── seed.py                          # Existing
+
+ ---
+ Step 1: Database Schema
+
+ File: backend/prisma/schema.prisma
+
+ New model: ChatMessage
+
+ id, user_id, role ("user"/"assistant"/"system"), content, metadata (Json?), created_at
+ Index: [user_id, created_at]
+
+ New model: ActivityLog
+
+ id, user_id, domain, category, data (Json), source_msg?, logged_at, created_at
+ Index: [user_id, domain, logged_at]
+
+ Domain + Category taxonomy (pre-defined, extensible):
+
+ EXERCISE domain:
+ ├── pushup         {sets, reps}
+ ├── squat          {sets, reps, weight, weight_unit}
+ ├── bench_press    {sets, reps, weight, weight_unit}
+ ├── deadlift       {sets, reps, weight, weight_unit}
+ ├── overhead_press {sets, reps, weight, weight_unit}
+ ├── pull_up        {sets, reps}
+ ├── plank          {sets, duration_sec}
+ ├── running        {distance_km, duration_min, pace}
+ ├── cycling        {distance_km, duration_min}
+ ├── swimming       {distance_m, duration_min, laps}
+ ├── walking        {distance_km, duration_min, steps}
+ ├── yoga           {duration_min, type}
+ ├── stretching     {duration_min}
+ ├── hiit           {duration_min, rounds}
+ ├── jump_rope      {duration_min, reps}
+ ├── rowing         {distance_m, duration_min}
+ ├── lunges         {sets, reps, weight, weight_unit}
+ ├── dips           {sets, reps}
+ ├── burpees        {sets, reps}
+ ├── box_jump       {sets, reps, height_cm}
+ ├── battle_ropes   {duration_min}
+ ├── stair_climb    {duration_min, floors}
+ ├── sport_session  {sport_name, duration_min}
+ └── custom         {name, sets, reps, weight, duration_min}
+
+ NUTRITION domain:
+ ├── meal           {meal_name, calories, protein_g, carbs_g, fat_g, description}
+ ├── snack          {name, calories, protein_g}
+ ├── water          {amount_ml}
+ ├── supplement     {name, amount, unit}
+ ├── coffee         {cups, with_sugar, with_milk}
+ ├── alcohol        {type, units}
+ ├── fasting        {start_time, end_time, hours}
+ └── custom_food    {name, calories, notes}
+
+ LIFESTYLE domain:
+ ├── sleep          {hours, quality ("good"/"ok"/"bad"), bed_time, wake_time}
+ ├── nap            {duration_min}
+ ├── mood           {level (1-5), note}
+ ├── energy         {level (1-5), time_of_day}
+ ├── stress         {level (1-5), source}
+ ├── meditation     {duration_min, type}
+ ├── cold_shower    {duration_sec}
+ ├── sauna          {duration_min, temperature}
+ ├── steps          {count}
+ ├── weight_check   {weight_kg}
+ ├── body_fat       {percentage}
+ ├── rest_day       {reason}
+ └── injury         {body_part, severity, notes}
+
+ New model: DailySummary
+
+ id, user_id, date (unique per user+date), summary (Json), created_at, updated_at
+
+ New model: UserGoal
+
+ id, user_id, goal_type, target (Json), active (bool), created_at, updated_at
+ Index: [user_id, active]
+
+ Update User model
+
+ - Add onesignal_id String?
+ - Add relations to all 4 new models
+
+ Mem0 SQL (run in Supabase SQL editor)
+
+ CREATE EXTENSION IF NOT EXISTS vector;
+ CREATE TABLE IF NOT EXISTS memories (
+   id TEXT PRIMARY KEY,
+   embedding vector(1536),
+   metadata JSONB,
+   created_at TIMESTAMPTZ DEFAULT NOW(),
+   updated_at TIMESTAMPTZ DEFAULT NOW()
+ );
+
+ ---
+ Step 2: Mem0 Memory Client
+
+ New file: backend/memory/client.py
+
+ from mem0 import Memory
+
+ config = {
+     "vector_store": {
+         "provider": "supabase",
+         "config": {
+             "connection_string": SUPABASE_DIRECT_URL,  # port 5432, NOT pooled
+             "collection_name": "memories",
+             "embedding_model_dims": 1536,
+             "index_method": "hnsw",
+             "index_measure": "cosine_distance"
+         }
+     },
+     "llm": {
+         "provider": "openai",
+         "config": {
+             "model": "openai/gpt-4o-mini",
+             "api_key": OPENROUTER_API_KEY,
+             "openai_base_url": "https://openrouter.ai/api/v1"
+         }
+     },
+     "embedder": {
+         "provider": "openai",
+         "config": {
+             "model": "text-embedding-3-small",
+             "api_key": OPENAI_API_KEY  # needed for embeddings
+         }
+     }
+ }
+
+ mem0 = Memory.from_config(config)
+
+ How Mem0 is used in the agent:
+ 1. Before each LLM call → mem0.search(user_message, user_id=user_id) retrieves relevant memories
+ 2. After each exchange → mem0.add([user_msg, assistant_msg], user_id=user_id) stores new facts
+ 3. Mem0 auto-extracts facts: "User did 22 pushups on April 21" → stored as a memory
+ 4. Mem0 auto-deduplicates and updates: "User's pushup PR is now 25" replaces old "PR is 22"
+
+ ---
+ Step 3: LangGraph Agent
+
+ backend/agent/state.py — Agent state definition
+
+ class AgentState(TypedDict):
+     messages: Annotated[list[BaseMessage], add_messages]
+     user_id: str
+     memories: str          # formatted Mem0 search results
+     user_profile: str      # name, goals, onboarding answers
+     recent_summary: str    # last 7 days activity summary
+
+ backend/agent/prompts.py — Coach personality
+
+ You are Coach — direct, slightly provocative fitness coach inside Fity.
+
+ PERSONALITY:
+ - MORE proactive than the user. You ask questions first.
+ - Challenge: "Only 10 pushups? Last week you did 15. What happened?"
+ - Warm but honest. Short sentences. No emojis.
+ - Sound like a real coach texting, not a chatbot.
+
+ BEHAVIOR:
+ - When user mentions ANY exercise/food/lifestyle data → call the appropriate logging tool
+ - Confirm what you logged: "Logged: 22 pushups. 10 more than last Tuesday."
+ - If ambiguous, ask before logging: "How many sets? Just bodyweight?"
+ - Reference their history from memories and recent summary.
+ - If they haven't told you about workout/food/sleep today → ASK.
+ - Keep responses under 3 sentences unless detailed question.
+
+ CONTEXT:
+ User: {user_profile}
+ Memories: {memories}
+ Recent 7 days: {recent_summary}
+ Today: {today}
+
+ backend/agent/tools/exercise.py — Example tool
+
+ @tool
+ def log_exercise(
+     category: str,         # "pushup", "squat", "running", etc.
+     reps: int = None,
+     sets: int = None,
+     weight: float = None,
+     weight_unit: str = "kg",
+     duration_min: float = None,
+     distance_km: float = None,
+     notes: str = ""
+ ) -> str:
+     """Log an exercise activity. Call this when the user mentions
+     doing any physical exercise."""
+     # Insert into activity_logs via Prisma
+     # Return confirmation string for LLM to reference
+
+ Similar tools: log_nutrition, log_lifestyle, get_user_stats, search_memory
+
+ backend/agent/nodes.py — Graph nodes
+
+ async def load_context(state):
+     """Pre-LLM node: fetch Mem0 memories + profile + recent summary"""
+     memories = mem0.search(last_user_msg, user_id=state["user_id"])
+     profile = await get_user_profile(state["user_id"])
+     summary = await get_recent_summary(state["user_id"])
+     return {"memories": format(memories), "user_profile": profile, "recent_summary": summary}
+
+ async def call_model(state):
+     """Main agent node: call OpenRouter LLM with tools"""
+     system = build_system_prompt(state)
+     messages = [SystemMessage(content=system)] + state["messages"]
+     response = await llm_with_tools.ainvoke(messages)
+     return {"messages": [response]}
+
+ async def save_memory(state):
+     """Post-LLM node: save exchange to Mem0"""
+     last_user = get_last_user_msg(state)
+     last_assistant = get_last_assistant_msg(state)
+     mem0.add([
+         {"role": "user", "content": last_user},
+         {"role": "assistant", "content": last_assistant}
+     ], user_id=state["user_id"])
+     return state
+
+ backend/agent/graph.py — The compiled graph
+
+         ┌──────────┐
+         │  START    │
+         └────┬─────┘
+              │
+              ▼
+      ┌──────────────┐
+      │ load_context  │  ← Mem0 search + profile + summary
+      └──────┬───────┘
+             │
+             ▼
+      ┌──────────────┐         ┌─────────┐
+ ┌───>│    agent      │────────>│  tools   │
+ │    │  (OpenRouter) │  tools? │  node    │
+ │    └──────┬───────┘         └────┬────┘
+ │           │ no tools              │
+ │           ▼                       │
+ │    ┌──────────────┐              │
+ │    │ save_memory   │  ← Mem0 add │
+ │    └──────┬───────┘              │
+ │           │                      │
+ │           ▼                      │
+ │         END              loops back to agent
+ └──────────────────────────────────┘
+
+ LLM via OpenRouter:
+ llm = ChatOpenAI(
+     model="openai/gpt-4o-mini",   # or any OpenRouter model
+     api_key=OPENROUTER_API_KEY,
+     base_url="https://openrouter.ai/api/v1",
+ )
+ llm_with_tools = llm.bind_tools(all_tools)
+
+ ---
+ Step 4: API Routes
+
+ backend/routes/chat.py
+
+ POST /api/chat/stream — SSE streaming
+ 1. Auth: require Supabase JWT
+ 2. Save user message to chat_messages
+ 3. Run graph.astream() with stream_mode=["messages", "updates"]
+ 4. Stream tokens: data: {"type":"token","content":"word "}
+ 5. On tool execution: data: {"type":"extraction","logs":[...]}
+ 6. On done: save assistant message to chat_messages, emit data: {"type":"done"}
+
+ GET /api/chat/history?before={cursor}&limit=20 — paginated history from chat_messages
+
+ GET /api/chat/context — proactive opener
+ - Check time of day, last activity, missing data
+ - Short LLM call → return 1-line opener
+
+ backend/routes/progress.py
+
+ GET /api/progress/today → Home screen
+ { "streak": 5, "today_plan": {...}, "insight": "...", "recent_logs": [...] }
+
+ GET /api/progress/trace → Trace screen
+ { "streak": 5, "best_streak": 8, "heatmap": [...], "prs": [...],
+   "strength_trend": [...], "weekly_recap": "..." }
+
+ GET /api/progress/chart?metric=pushups&period=30d → Line graphs
+ { "points": [{"date":"2026-04-01","value":10}, ...], "unit": "reps", "label": "Pushups" }
+
+ GET /api/progress/metrics → Available metrics for pills
+ { "metrics": [{"key":"pushup","label":"Pushups","domain":"exercise"},
+               {"key":"sleep","label":"Sleep","domain":"lifestyle"}, ...] }
+
+ backend/routes/notifications.py
+
+ POST /api/notifications/register — save OneSignal player_id to User
+ Scheduled checks (cron or on-demand):
+ - No exercise by noon → push "Morning session? Or saving it for tonight?"
+ - No food by 2pm → push "What'd you have for lunch? I'm tracking."
+ - No sleep logged by 9pm → push "How'd you sleep last night?"
+ - Uses OneSignal REST API via httpx
+
+ ---
+ Step 5: Mobile App Changes
+
+ New file: fity/src/services/chatApi.ts
+
+ - sendMessage(text, token) → POST /api/chat/stream, returns ReadableStream
+ - getHistory(token, before?) → GET /api/chat/history
+ - getProactiveMessage(token) → GET /api/chat/context
+
+ New file: fity/src/services/progressApi.ts
+
+ - getToday(token) → GET /api/progress/today
+ - getTrace(token) → GET /api/progress/trace
+ - getChart(token, metric, period) → GET /api/progress/chart
+ - getMetrics(token) → GET /api/progress/metrics
+
+ Modify: fity/src/store/chatStore.ts
+
+ - Add loading, streaming, streamingMsgId state
+ - Add appendToStream(msgId, token) — concatenates token to message text
+ - Add finishStream(msgId) — marks streaming done
+ - Add loadHistory(msgs) — prepend older messages
+
+ Rewrite: fity/src/store/progressStore.ts
+
+ - Remove fixture-based init(), replace with fetchToday(), fetchTrace(), fetchChart()
+ - Add handleExtraction(logs) for optimistic updates from chat SSE
+ - Add chartData, availableMetrics state
+
+ Modify: fity/app/(app)/chat.tsx
+
+ - handleSend: push user msg → call chatApi.sendMessage → read SSE via response.body.getReader() → parse SSE events
+ → appendToStream per token → handle extraction events → finishStream
+ - On mount (authenticated): load history + proactive opener
+ - Keep intro script for unauthenticated/first-time only
+
+ Modify: fity/app/(app)/home.tsx
+
+ - Replace TODAY_BLOCKS hardcoded array with todayPlan from progress store
+ - Replace hardcoded insight with insight from store
+ - Call fetchToday() on mount
+ - Add RecentLogsCard section below plan card
+
+ Modify: fity/app/(app)/trace.tsx
+
+ - Replace init() with fetchTrace() on mount
+ - Add metric selector pills + line graph below existing components
+ - Call fetchChart(metric, '30d') when pill tapped
+
+ New file: fity/src/components/home/RecentLogsCard.tsx
+
+ - Shows today's activity logs as pills: "22 pushups", "Lunch · 650 cal", "7.5h sleep"
+ - Domain-colored icons
+
+ New file: fity/src/components/trace/LineTrend.tsx
+
+ - SVG line chart using react-native-svg (already installed)
+ - Bezier path, animated reveal via Reanimated strokeDashoffset
+ - Lime line, dark bg, muted axis labels
+
+ New file: fity/src/components/trace/MetricPills.tsx
+
+ - Horizontal scroll of selectable pills (auto-populated from logged metrics)
+ - Active = lime, inactive = dark gray
+
+ ---
+ Step 6: OneSignal Push Notifications
+
+ Mobile: fity/src/services/onesignal.ts
+
+ - Initialize OneSignal on app boot (in root layout)
+ - Register player_id with backend after auth
+ - Handle notification tap → deep link to chat
+
+ Dependencies
+
+ - package.json: add react-native-onesignal
+ - .env: ONESIGNAL_APP_ID
+ - Backend .env: ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY
+
+ ---
+ Dependencies
+
+ Backend (requirements.txt additions)
+
+ langgraph>=0.4.0
+ langchain-core>=0.3.0
+ langchain-openai>=0.3.0
+ mem0ai[vector_stores]>=0.1.0
+
+ Backend .env additions
+
+ OPENROUTER_API_KEY=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
+ OPENROUTER_MODEL=openai/gpt-4o-mini
+ OPENAI_API_KEY=...                    # needed for Mem0 embeddings (text-embedding-3-small)
+ ONESIGNAL_APP_ID=...
+ ONESIGNAL_REST_API_KEY=...
+
+ Supabase SQL (run once)
+
+ CREATE EXTENSION IF NOT EXISTS vector;
+ CREATE TABLE IF NOT EXISTS memories (
+   id TEXT PRIMARY KEY,
+   embedding vector(1536),
+   metadata JSONB,
+   created_at TIMESTAMPTZ DEFAULT NOW(),
+   updated_at TIMESTAMPTZ DEFAULT NOW()
+ );
+
+ Mobile (package.json additions)
+
+ react-native-onesignal
+
+ ---
+ Build Order
+
+ ┌─────┬────────────────────────────────────────┬───────────────────────────────────────────────────────────────┐
+ │  #  │                  What                  │                           Key Files                           │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 1   │ DB schema + Mem0 table + migration     │ schema.prisma, Supabase SQL                                   │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 2   │ Config + Mem0 client                   │ config.py, memory/client.py                                   │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 3   │ LangGraph agent (graph + tools +       │ agent/* (7 files)                                             │
+ │     │ nodes)                                 │                                                               │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 4   │ Chat API route (SSE streaming)         │ routes/chat.py                                                │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 5   │ Chat frontend (streaming UI)           │ chatApi.ts, chatStore.ts, chat.tsx                            │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 6   │ Progress API routes                    │ routes/progress.py                                            │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 7   │ Home screen real data                  │ progressApi.ts, progressStore.ts, home.tsx,                   │
+ │     │                                        │ RecentLogsCard.tsx                                            │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 8   │ Trace screen + line graphs             │ trace.tsx, LineTrend.tsx, MetricPills.tsx                     │
+ ├─────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+ │ 9   │ OneSignal push notifications           │ routes/notifications.py, onesignal.ts                         │
+ └─────┴────────────────────────────────────────┴───────────────────────────────────────────────────────────────┘
+
+ ---
+ Verification
+
+ 1. Chat + extraction: Send "I did 22 pushups today" → verify SSE stream → verify activity_logs row → verify coach
+ confirms + compares to history
+ 2. Mem0 memory: Send "I hate leg day" → close app → reopen → send "what should I train?" → verify coach remembers
+ the preference
+ 3. Proactive: Open chat cold → verify coach asks about workout/food contextually
+ 4. Home: After logging → verify real streak, plan, insight, recent logs
+ 5. Trace: After days of data → verify heatmap, PRs, line graphs with real data
+ 6. Push: Don't log food by 2pm → verify OneSignal notification → tap → chat opens
+ 

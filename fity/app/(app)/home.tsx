@@ -15,12 +15,14 @@ import { HomeGreeting } from '../../src/components/home/HomeGreeting';
 import { StreakCard } from '../../src/components/home/StreakCard';
 import { TodayPlanCard } from '../../src/components/home/TodayPlanCard';
 import { InsightCard } from '../../src/components/home/InsightCard';
+import { RecentLogsCard } from '../../src/components/home/RecentLogsCard';
 import { CornerPullButton } from '../../src/components/CornerPullButton';
 import { useProgressStore } from '../../src/store/progressStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { DURATION, EASING_OUT_CUBIC, SPRING_SOFT, STAGGER } from '../../src/theme/motion';
+import { trackEvent } from '../../src/services/posthog';
 
-const TODAY_BLOCKS = [
+const FALLBACK_BLOCKS = [
   'Warm-up · 3 min',
   'Squat · 3×8',
   'Push-up · 3×6',
@@ -28,22 +30,24 @@ const TODAY_BLOCKS = [
   'Cooldown · 2 min',
 ];
 
-/**
- * Home surface. Pure status glance — streak, today's session, coach
- * insight. No CTAs compete for attention; the lime corner-pull button
- * is the single entry into Chat, mirroring Chat → Trace for UI uniformity.
- */
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { streak, init } = useProgressStore();
+  const { streak, todayLogs, insight, init, fetchToday } = useProgressStore();
   const profile = useAuthStore((s) => s.profile);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
 
+  const isAuthenticated = !!session?.access_token;
+
   useEffect(() => {
-    init();
-  }, [init]);
+    trackEvent('home_viewed', { is_authenticated: isAuthenticated });
+    if (isAuthenticated) {
+      fetchToday();
+    } else {
+      init();
+    }
+  }, [isAuthenticated, init, fetchToday]);
 
   const handleLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -51,8 +55,6 @@ export default function Home() {
     router.replace('/onboarding/welcome');
   };
 
-  // Layer reacts to corner-pull — scales to 0.92 and rounds the
-  // bottom-right, the same peel used on Chat.
   const pullProgress = useSharedValue(0);
   const layerScale = useSharedValue(1);
   const layerRadius = useSharedValue(0);
@@ -69,11 +71,21 @@ export default function Home() {
   });
 
   const goToChat = () => {
-    // Snap the layer back smoothly after the route pushes.
     layerScale.value = withSpring(1, SPRING_SOFT);
     layerRadius.value = withTiming(0, { duration: DURATION.base });
     router.push('/(app)/chat');
   };
+
+  // Build today plan blocks from logs or fallback
+  const planBlocks = todayLogs.length > 0
+    ? todayLogs.map((l) => l.label)
+    : FALLBACK_BLOCKS;
+
+  const planTitle = todayLogs.length > 0
+    ? `Today · ${todayLogs.length} logged`
+    : 'Full body · foundations';
+
+  const displayInsight = insight || "Your squat looked strong in the baseline. I'll add a tempo cue today to lock in the pattern.";
 
   return (
     <View style={styles.root}>
@@ -82,7 +94,6 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 120 }}
         >
-          {/* Profile row with logout */}
           {session && (
             <Animated.View
               entering={FadeInDown.duration(DURATION.base).easing(EASING_OUT_CUBIC)}
@@ -104,15 +115,18 @@ export default function Home() {
           <HomeGreeting name={profile?.display_name ?? undefined} />
           <StreakCard streak={streak} delay={STAGGER.normal} />
           <TodayPlanCard
-            title="Full body · foundations"
-            durationMin={28}
-            blocks={TODAY_BLOCKS}
+            title={planTitle}
+            durationMin={todayLogs.length > 0 ? todayLogs.length : 28}
+            blocks={planBlocks}
             delay={STAGGER.normal * 2}
           />
           <InsightCard
-            insight="Your squat looked strong in the baseline. I'll add a tempo cue today to lock in the pattern."
+            insight={displayInsight}
             delay={STAGGER.normal * 3}
           />
+          {isAuthenticated && todayLogs.length > 0 && (
+            <RecentLogsCard logs={todayLogs} delay={STAGGER.normal * 4} />
+          )}
         </ScrollView>
       </Animated.View>
       <CornerPullButton

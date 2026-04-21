@@ -19,6 +19,7 @@ import { colors } from '../../src/theme/colors';
 import { useAuthStore } from '../../src/store/authStore';
 import { onboardingApi } from '../../src/services/api';
 import { getOrCreateDeviceId } from '../../src/services/userId';
+import { trackEvent, identifyUser } from '../../src/services/posthog';
 
 const APressable = Animated.createAnimatedComponent(Pressable);
 
@@ -91,6 +92,7 @@ export default function Auth() {
       Alert.alert('Missing fields', 'Please enter your email and password.');
       return;
     }
+    trackEvent('auth_method_selected', { method: 'email' });
     const { error } = isSignUp
       ? await signUpWithEmail(email.trim(), password)
       : await signInWithEmail(email.trim(), password);
@@ -103,6 +105,7 @@ export default function Auth() {
   };
 
   const handleApple = async () => {
+    trackEvent('auth_method_selected', { method: 'apple' });
     const { error } = await signInWithApple();
     if (error) {
       Alert.alert('Auth Error', error);
@@ -112,6 +115,7 @@ export default function Auth() {
   };
 
   const handleGoogle = async () => {
+    trackEvent('auth_method_selected', { method: 'google' });
     const { error } = await signInWithGoogle();
     if (error) {
       Alert.alert('Auth Error', error);
@@ -121,6 +125,7 @@ export default function Auth() {
   };
 
   const handleSkip = () => {
+    trackEvent('auth_method_selected', { method: 'skip' });
     skipAuth();
     router.push('/onboarding/notifications');
   };

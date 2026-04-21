@@ -9,21 +9,45 @@ import { Heatmap } from '../../src/components/trace/Heatmap';
 import { PRWall } from '../../src/components/trace/PRWall';
 import { StrengthCurve } from '../../src/components/trace/StrengthCurve';
 import { WeeklyRecap } from '../../src/components/trace/WeeklyRecap';
+import { MetricPills } from '../../src/components/trace/MetricPills';
+import { LineTrend } from '../../src/components/trace/LineTrend';
 import { useProgressStore } from '../../src/store/progressStore';
+import { useAuthStore } from '../../src/store/authStore';
+import { trackEvent } from '../../src/services/posthog';
 
-/**
- * Trace — the "hidden" progress layer reachable only via the corner-pull
- * gesture from Chat. Presented as a transparentModal so the Chat layer
- * remains visible underneath during transitions.
- */
 export default function Trace() {
   const router = useRouter();
-  const { streak, bestStreak, heatmap, prs, strength, recap, init } = useProgressStore();
+  const session = useAuthStore((s) => s.session);
+  const {
+    streak, bestStreak, heatmap, prs, strength, recap,
+    chartData, chartUnit, chartLabel, availableMetrics, selectedMetric,
+    init, fetchTrace, fetchMetrics, fetchChart, setSelectedMetric,
+  } = useProgressStore();
+
+  const isAuthenticated = !!session?.access_token;
 
   useEffect(() => {
-    init();
+    trackEvent('trace_viewed');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-  }, [init]);
+    if (isAuthenticated) {
+      fetchTrace();
+      fetchMetrics();
+    } else {
+      init();
+    }
+  }, [isAuthenticated]);
+
+  // Fetch chart data when selected metric changes
+  useEffect(() => {
+    if (isAuthenticated && selectedMetric) {
+      fetchChart(selectedMetric, '30d');
+    }
+  }, [isAuthenticated, selectedMetric]);
+
+  const handleMetricSelect = (key: string) => {
+    trackEvent('metric_selected', { metric_key: key });
+    setSelectedMetric(key);
+  };
 
   return (
     <View style={styles.root}>
@@ -37,6 +61,24 @@ export default function Trace() {
         <Heatmap cells={heatmap} />
         <PRWall prs={prs} />
         <StrengthCurve data={strength} />
+
+        {isAuthenticated && availableMetrics.length > 0 && (
+          <>
+            <MetricPills
+              metrics={availableMetrics}
+              selected={selectedMetric}
+              onSelect={handleMetricSelect}
+            />
+            {chartData.length > 0 && (
+              <LineTrend
+                points={chartData}
+                unit={chartUnit}
+                label={chartLabel}
+              />
+            )}
+          </>
+        )}
+
         <WeeklyRecap recap={recap} />
       </ScrollView>
     </View>

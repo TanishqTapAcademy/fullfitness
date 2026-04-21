@@ -8,11 +8,19 @@ import { colors } from '../src/theme/colors';
 import { useAuthStore } from '../src/store/authStore';
 import { onboardingApi } from '../src/services/api';
 import { supabase } from '../src/services/supabase';
+import { initOneSignal, registerPushToken, setupNotificationHandler } from '../src/services/onesignal';
+import { router } from 'expo-router';
+import { initPostHog, identifyUser } from '../src/services/posthog';
 
 export default function RootLayout() {
   const initialized = useAuthStore((s) => s.initialized);
 
   useEffect(() => {
+    // Initialize OneSignal and PostHog early
+    initOneSignal();
+    setupNotificationHandler(() => router.push('/(app)/chat'));
+    initPostHog();
+
     const boot = async () => {
       await useAuthStore.getState().initialize();
 
@@ -24,7 +32,15 @@ export default function RootLayout() {
           if (user) {
             useAuthStore.getState().setProfile(user);
             useAuthStore.getState().setIsNewUser(!user.display_name);
+            // Identify user in PostHog
+            identifyUser(session.user.id, {
+              email: session.user.email,
+              display_name: user.display_name,
+              created_at: session.user.created_at,
+            });
           }
+          // Register push token with backend
+          registerPushToken();
         } catch {
           // Non-critical
         }

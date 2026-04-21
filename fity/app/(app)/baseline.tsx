@@ -11,6 +11,7 @@ import { useBaselineStore } from '../../src/store/baselineStore';
 import { useProgressStore } from '../../src/store/progressStore';
 import { useChatStore } from '../../src/store/chatStore';
 import { POST_BASELINE_MESSAGE } from '../../src/data/chatScripts';
+import { trackEvent } from '../../src/services/posthog';
 
 /**
  * Baseline modal sheet. 4 sequential tests → celebration → auto-navigates
@@ -26,6 +27,7 @@ export default function Baseline() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    trackEvent('baseline_started');
     reset();
     setShowCelebration(false);
     return () => {
@@ -36,8 +38,10 @@ export default function Baseline() {
   const test = BASELINE_TESTS[index];
 
   const handleAnswer = (r: 'good' | 'ok' | 'flag') => {
+    trackEvent('baseline_test_completed', { test_id: test.id, result: r });
     setResult(test.id, r);
     if (index === BASELINE_TESTS.length - 1) {
+      trackEvent('baseline_completed');
       finish();
       // Seed progress & bump the first day-streak as the baseline closes.
       init();

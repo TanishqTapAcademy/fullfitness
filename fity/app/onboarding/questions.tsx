@@ -7,6 +7,7 @@ import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { QuestionRenderer } from '../../src/components/renderers/QuestionRenderer';
 import { useOnboardingStore } from '../../src/store/onboardingStore';
 import { colors } from '../../src/theme/colors';
+import { trackEvent } from '../../src/services/posthog';
 
 export default function DynamicQuestions() {
   const router = useRouter();
@@ -41,6 +42,11 @@ export default function DynamicQuestions() {
   }
 
   const handleContinue = () => {
+    trackEvent('question_answered', {
+      step_id: question.step_id,
+      question_type: question.type,
+      index: currentIndex,
+    });
     if (isLast) {
       router.push('/onboarding/chat');
     } else {

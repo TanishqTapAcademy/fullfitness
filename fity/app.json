@@ -42,7 +42,15 @@
       ],
       "expo-secure-store",
       "expo-apple-authentication",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "development",
+          "devTeam": "OPTIONAL_APPLE_TEAM_ID"
+        }
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -63,10 +63,11 @@ export const onboardingApi = {
     opts?: { display_name?: string; avatar?: string }
   ): Promise<{ success: boolean; is_new_user: boolean; user: any }> => {
     const headers = await authHeaders();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const res = await fetch(`${BASE_URL}/users/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({ device_id: deviceId, ...opts }),
+      body: JSON.stringify({ device_id: deviceId, timezone, ...opts }),
     });
     if (!res.ok) throw new Error('Failed to sync user');
     return res.json();

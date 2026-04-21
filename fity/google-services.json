@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "445568439492",
+    "project_id": "fity-ad54b",
+    "storage_bucket": "fity-ad54b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:445568439492:android:6ecee7c15cc7bd40fba591",
+        "android_client_info": {
+          "package_name": "com.anonymous.fity"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBu96lsGbSt7z7sKLvpNTWWc5Ngqd7sfJE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -8,6 +8,7 @@ import { Image } from 'react-native';
 import { colors } from '../../src/theme/colors';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { useOnboardingStore } from '../../src/store/onboardingStore';
+import { trackEvent } from '../../src/services/posthog';
 
 export default function Welcome() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function Welcome() {
         </Animated.Text>
       </View>
       <View style={styles.footer}>
-        <PrimaryButton label="Get started" onPress={() => router.push('/onboarding/questions')} />
+        <PrimaryButton label="Get started" onPress={() => { trackEvent('onboarding_started'); router.push('/onboarding/questions'); }} />
       </View>
     </View>
   );

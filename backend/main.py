@@ -10,6 +10,9 @@ from routes.onboarding import router as onboarding_router
 from routes.admin import router as admin_router
 from routes.users import router as users_router
 from routes.admin_auth import router as auth_router
+from routes.chat import router as chat_router
+from routes.progress import router as progress_router
+from routes.notifications import router as notifications_router
 
 load_dotenv()
 
@@ -25,7 +28,13 @@ async def lifespan(app: FastAPI):
         await _get_jwks()
     except Exception:
         pass  # Non-critical — will fetch on first request
+
+    from scheduler import start_scheduler, stop_scheduler
+    start_scheduler(db)
+
     yield
+
+    stop_scheduler()
     await db.disconnect()
 
 
@@ -43,6 +52,9 @@ app.include_router(onboarding_router, prefix="/api/onboarding")
 app.include_router(admin_router, prefix="/api/admin")
 app.include_router(users_router, prefix="/api/users")
 app.include_router(auth_router, prefix="/api/auth")
+app.include_router(chat_router, prefix="/api/chat")
+app.include_router(progress_router, prefix="/api/progress")
+app.include_router(notifications_router, prefix="/api/notifications")
 
 
 @app.get("/api/health")

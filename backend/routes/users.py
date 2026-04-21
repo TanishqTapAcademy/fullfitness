@@ -18,6 +18,7 @@ class UserSyncRequest(BaseModel):
     device_id: Optional[str] = None
     display_name: Optional[str] = None
     avatar: Optional[str] = None
+    timezone: Optional[str] = None
 
 
 @router.post("/sync")
@@ -41,6 +42,8 @@ async def sync_user(body: UserSyncRequest, user: dict = Depends(require_auth)):
             update_data["display_name"] = body.display_name
         if body.avatar:
             update_data["avatar"] = body.avatar
+        if body.timezone:
+            update_data["timezone"] = body.timezone
         await db.user.update(
             where={"supabase_id": supabase_id},
             data=update_data,
@@ -56,6 +59,8 @@ async def sync_user(body: UserSyncRequest, user: dict = Depends(require_auth)):
             create_data["display_name"] = body.display_name
         if body.avatar:
             create_data["avatar"] = body.avatar
+        if body.timezone:
+            create_data["timezone"] = body.timezone
         await db.user.create(data=create_data)
 
     # Migrate device_id responses to user_id if device_id provided

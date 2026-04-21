@@ -15,46 +15,84 @@ import { InlineActionCard } from '../../src/components/chat/InlineActionCard';
 import { ChatInputBar } from '../../src/components/chat/ChatInputBar';
 import { TraceButton } from '../../src/components/chat/TraceButton';
 import { useChatStore, type Msg } from '../../src/store/chatStore';
+import { useAuthStore } from '../../src/store/authStore';
+import { useProgressStore } from '../../src/store/progressStore';
 import { FIRST_MESSAGES } from '../../src/data/chatScripts';
 import { DURATION, SPRING_SOFT } from '../../src/theme/motion';
+import { sendMessage, getHistory, getProactiveMessage, type SSEEvent } from '../../src/services/chatApi';
+import { trackEvent } from '../../src/services/posthog';
 
-/**
- * Fullscreen Chat. On first mount we play through FIRST_MESSAGES —
- * typing dots then the message, staggered so it feels alive. The last
- * message has a lime CTA that opens the Baseline modal.
- *
- * TraceButton sits over the input bar in the bottom-right. Dragging it
- * up-left peels the chat layer back; tapping opens Trace directly.
- */
 export default function Chat() {
   const router = useRouter();
-  const { messages, didSeeIntro, push, markIntroSeen } = useChatStore();
+  const {
+    messages, didSeeIntro, streaming,
+    push, markIntroSeen, startStream, appendToStream, finishStream,
+    addExtraction, loadHistory, setLoading,
+  } = useChatStore();
+  const session = useAuthStore((s) => s.session);
+  const handleExtraction = useProgressStore((s) => s.handleExtraction);
   const [typing, setTyping] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Shared value mirrored from TraceButton drag progress (0–1).
   const pullProgress = useSharedValue(0);
+  const layerScale = useSharedValue(1);
+  const layerRadius = useSharedValue(0);
 
-  // Play the intro script the first time the user lands here.
+  const isAuthenticated = !!session?.access_token;
+
+  // Track chat opened
   useEffect(() => {
-    if (didSeeIntro) return;
+    trackEvent('chat_opened', { is_authenticated: isAuthenticated });
+  }, []);
+
+  // Load history + proactive opener for authenticated users
+  useEffect(() => {
+    if (!isAuthenticated || historyLoaded) return;
+    setHistoryLoaded(true);
+
+    (async () => {
+      try {
+        const { messages: history } = await getHistory();
+        if (history.length > 0) {
+          const mapped: Msg[] = history.map((m) => ({
+            id: m.id,
+            from: m.role === 'user' ? 'user' : 'coach',
+            text: m.content,
+            ts: new Date(m.created_at).getTime(),
+          }));
+          loadHistory(mapped);
+          markIntroSeen();
+        } else {
+          // No history — get proactive opener
+          const opener = await getProactiveMessage();
+          if (opener) {
+            push({ id: `opener-${Date.now()}`, from: 'coach', text: opener });
+            markIntroSeen();
+          }
+        }
+      } catch {
+        // Fallback to intro script
+      }
+    })();
+  }, [isAuthenticated]);
+
+  // Play intro script for unauthenticated or first-time users
+  useEffect(() => {
+    if (didSeeIntro || isAuthenticated) return;
     markIntroSeen();
 
     const timers = timersRef.current;
     let t = 0;
     FIRST_MESSAGES.forEach((m, i) => {
       t += m.delay ?? 400;
-      // Show typing indicator first.
-      timers.push(
-        setTimeout(() => setTyping(true), t - 250),
-      );
+      timers.push(setTimeout(() => setTyping(true), t - 250));
       timers.push(
         setTimeout(() => {
           setTyping(false);
           push({ id: m.id, from: 'coach', text: m.text, cta: m.cta });
         }, t),
       );
-      // Small read-time between messages.
       t += Math.min(1200, 500 + m.text.length * 18);
       if (i === FIRST_MESSAGES.length - 1) {
         timers.push(setTimeout(() => setTyping(false), t));
@@ -65,7 +103,6 @@ export default function Chat() {
       timers.forEach(clearTimeout);
       timersRef.current = [];
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openBaseline = () => router.push('/(app)/baseline');
@@ -74,20 +111,14 @@ export default function Chat() {
     else router.replace('/(app)/home');
   };
   const openTrace = () => {
-    // Snap the layer back smoothly after the route pushes.
     layerScale.value = withSpring(1, SPRING_SOFT);
     layerRadius.value = withTiming(0, { duration: DURATION.base });
     router.push('/(app)/trace');
   };
 
-  // Chat layer reacts to the pull progress — scales to 0.92 and rounds
-  // the bottom-right corner, like a page peeling back.
-  const layerScale = useSharedValue(1);
-  const layerRadius = useSharedValue(0);
-
   const layerStyle = useAnimatedStyle(() => {
     const p = pullProgress.value;
-    const scale = 1 - p * 0.08; // 1 → 0.92
+    const scale = 1 - p * 0.08;
     const radius = p * 40;
     return {
       transform: [{ scale: layerScale.value * scale }],
@@ -96,19 +127,59 @@ export default function Chat() {
     };
   });
 
-  const handleSend = (text: string) => {
+  const handleSend = async (text: string) => {
+    trackEvent('message_sent', { message_length: text.length });
     push({ id: `u-${Date.now()}`, from: 'user', text });
-    // Canned ack — keeps v1 feeling alive without a backend.
+
+    if (!isAuthenticated) {
+      // Canned ack for unauthenticated users
+      setTyping(true);
+      const t = setTimeout(() => {
+        setTyping(false);
+        push({
+          id: `c-${Date.now()}`,
+          from: 'coach',
+          text: "Got it. I'll keep that in mind for today's session.",
+        });
+      }, 900);
+      timersRef.current.push(t);
+      return;
+    }
+
+    // Authenticated: stream from LangGraph agent
+    const streamId = `stream-${Date.now()}`;
     setTyping(true);
-    const t = setTimeout(() => {
-      setTyping(false);
-      push({
-        id: `c-${Date.now()}`,
-        from: 'coach',
-        text: "Got it. I'll keep that in mind for today's session.",
+    startStream(streamId);
+    setTyping(false);
+
+    try {
+      await sendMessage(text, (event: SSEEvent) => {
+        switch (event.type) {
+          case 'token':
+            if (event.content) {
+              appendToStream(streamId, event.content);
+            }
+            break;
+          case 'extraction':
+            if (event.logs) {
+              trackEvent('extraction_received', { count: event.logs.length });
+              addExtraction(event.logs);
+              handleExtraction(event.logs);
+            }
+            break;
+          case 'done':
+            finishStream(streamId);
+            break;
+          case 'error':
+            appendToStream(streamId, event.message || 'Something went wrong.');
+            finishStream(streamId);
+            break;
+        }
       });
-    }, 900);
-    timersRef.current.push(t);
+    } catch {
+      appendToStream(streamId, 'Connection lost. Try again.');
+      finishStream(streamId);
+    }
   };
 
   return (
@@ -123,7 +194,11 @@ export default function Chat() {
           <ChatScroller scrollKey={messages.length + (typing ? 1 : 0)}>
             {messages.map((m: Msg) => (
               <React.Fragment key={m.id}>
-                <MessageBubble from={m.from} text={m.text} typewriter={m.from === 'coach'} />
+                <MessageBubble
+                  from={m.from}
+                  text={m.text}
+                  typewriter={m.from === 'coach' && !m.streaming}
+                />
                 {m.cta ? (
                   <InlineActionCard
                     label={m.cta.label}

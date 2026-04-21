@@ -107,7 +107,7 @@ async def delete_question(question_id: str, _=Depends(require_admin)):
 async def get_response_analytics(_=Depends(require_admin)):
     db = get_db()
     all_responses, questions = await asyncio.gather(
-        db.response.find_many(),
+        db.response.find_many(take=500, order={"updated_at": "desc"}),
         db.question.find_many(where={"is_active": True}, order={"order": "asc"}),
     )
     total_questions = len(questions)

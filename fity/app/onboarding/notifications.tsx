@@ -18,6 +18,7 @@ import { useOnboardingStore, type NotificationPrefs } from '../../src/store/onbo
 import { colors } from '../../src/theme/colors';
 import { equipData, goalData, levelData } from '../../src/data/onboarding';
 import { DURATION } from '../../src/theme/motion';
+import { trackEvent } from '../../src/services/posthog';
 
 const equipShort: Record<string, string> = {
   full_gym: 'Full gym',
@@ -75,6 +76,7 @@ export default function Notifications() {
   const daysPerWeek = 3;
 
   const finish = () => {
+    trackEvent('onboarding_completed');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setDone(true);
   };
