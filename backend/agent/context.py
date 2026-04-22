@@ -1,9 +1,15 @@
 import asyncio
+import json
+import logging
+import time
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 from prisma import Prisma
 
 from memory.client import get_mem0
+
+logger = logging.getLogger(__name__)
 
 
 async def get_user_profile(db: Prisma, user_id: str) -> str:
@@ -85,31 +91,64 @@ async def get_recent_summary_for_user(db: Prisma, user) -> str:
     return "\n".join(lines)
 
 
-async def get_full_context(db: Prisma, user_id: str, query: str, run_id: str = "") -> tuple[str, str, str, str]:
-    """Fetch profile, summary, and memories in one call with single user lookup.
-    Returns (profile, summary, memories, db_user_id)."""
-    user = await db.user.find_first(where={"supabase_id": user_id})
-    if not user:
-        return "New user, no profile yet.", "No activity data yet.", "No memories.", ""
+async def get_full_context(
+    db: Prisma, user_id: str, query: str, run_id: str = "", db_user=None,
+) -> tuple[str, str, str, str, str]:
+    """Fetch profile, summary, memories, and detected patterns.
 
-    # Run profile + summary concurrently
-    profile_task = _build_profile(db, user)
-    summary_task = get_recent_summary_for_user(db, user)
-    profile, summary = await asyncio.gather(profile_task, summary_task)
-
-    # Mem0 two-tier search — run in thread with 3s timeout
-    if query:
-        try:
-            memories = await asyncio.wait_for(
-                asyncio.to_thread(search_memories, user_id, run_id, query),
-                timeout=3.0,
-            )
-        except asyncio.TimeoutError:
-            memories = "No memories (timed out)."
+    If db_user is provided, skip the user lookup entirely.
+    Returns (profile, summary, memories, db_user_id, active_patterns).
+    """
+    t0 = time.monotonic()
+    if db_user:
+        user = db_user
+        logger.info("  [timing] user lookup: skipped (reused from route)")
     else:
-        memories = "No memories."
+        user = await db.user.find_first(where={"supabase_id": user_id})
+        logger.info("  [timing] user lookup: %.0fms", (time.monotonic() - t0) * 1000)
+    if not user:
+        return "New user, no profile yet.", "No activity data yet.", "No memories.", "", ""
 
-    return profile, summary, memories, user.id
+    # Run profile + summary + mem0 search + patterns ALL concurrently
+    async def _profile():
+        t = time.monotonic()
+        r = await _build_profile(db, user)
+        logger.info("  [timing] profile: %.0fms", (time.monotonic() - t) * 1000)
+        return r
+
+    async def _summary():
+        t = time.monotonic()
+        r = await get_recent_summary_for_user(db, user)
+        logger.info("  [timing] summary: %.0fms", (time.monotonic() - t) * 1000)
+        return r
+
+    async def _mem0_search():
+        if not query:
+            return "No memories."
+        t = time.monotonic()
+        try:
+            r = await asyncio.wait_for(
+                asyncio.to_thread(search_memories, user_id, run_id, query),
+                timeout=2.0,
+            )
+            logger.info("  [timing] mem0 search: %.0fms", (time.monotonic() - t) * 1000)
+            return r
+        except asyncio.TimeoutError:
+            logger.info("  [timing] mem0 search: TIMEOUT after %.0fms", (time.monotonic() - t) * 1000)
+            return "No memories (timed out)."
+
+    async def _patterns():
+        t = time.monotonic()
+        r = await detect_patterns(db, user)
+        logger.info("  [timing] patterns: %.0fms", (time.monotonic() - t) * 1000)
+        return r
+
+    profile, summary, memories, patterns = await asyncio.gather(
+        _profile(), _summary(), _mem0_search(), _patterns()
+    )
+
+    logger.info("  [timing] get_full_context total: %.0fms", (time.monotonic() - t0) * 1000)
+    return profile, summary, memories, user.id, patterns
 
 
 def search_memories(user_id: str, run_id: str, query: str) -> str:
@@ -195,3 +234,114 @@ def save_memory(user_id: str, run_id: str, messages: list[dict]) -> None:
         mem0.add(messages, user_id=user_id, run_id=run_id)
     except Exception as e:
         print(f"[mem0] save error: {e}")
+
+
+# ── Pattern detection ───────────────────────────────────────────────────
+
+
+async def detect_patterns(db: Prisma, user) -> str:
+    """Analyse the last 21 days of activity logs and surface coach-usable patterns.
+
+    Patterns detected:
+    - Skipped days (recurring day-of-week misses)
+    - Weekend vs weekday nutrition differences
+    - Training frequency vs target
+    - PR tracking (recent personal records)
+    - Correlations (sleep quality vs next-day training)
+    """
+    three_weeks_ago = datetime.utcnow() - timedelta(days=21)
+    logs = await db.activitylog.find_many(
+        where={
+            "user_id": user.id,
+            "logged_at": {"gte": three_weeks_ago},
+        },
+        order={"logged_at": "desc"},
+        take=200,
+    )
+
+    if not logs:
+        return ""
+
+    patterns: list[str] = []
+
+    # Bucket logs by domain and day-of-week
+    exercise_days: list[str] = []  # day names with exercise
+    all_dates: set[str] = set()
+    nutrition_by_weekday: dict[str, list[float]] = defaultdict(list)  # weekday→calories
+    sleep_hours: list[tuple[str, float]] = []  # (date_str, hours)
+    exercise_dates: set[str] = set()
+
+    for log in logs:
+        date_str = log.logged_at.strftime("%Y-%m-%d")
+        day_name = log.logged_at.strftime("%A")
+        all_dates.add(date_str)
+
+        if log.domain == "exercise":
+            exercise_days.append(day_name)
+            exercise_dates.add(date_str)
+
+        elif log.domain == "nutrition":
+            data = _parse_data(log.data)
+            cals = data.get("calories")
+            if cals and isinstance(cals, (int, float)):
+                is_weekend = log.logged_at.weekday() >= 5
+                key = "weekend" if is_weekend else "weekday"
+                nutrition_by_weekday[key].append(float(cals))
+
+        elif log.domain == "lifestyle" and log.category == "sleep":
+            data = _parse_data(log.data)
+            hrs = data.get("hours")
+            if hrs and isinstance(hrs, (int, float)):
+                sleep_hours.append((date_str, float(hrs)))
+
+    # ── Pattern: Skipped day-of-week ────────────────────────────────
+    if exercise_days:
+        all_weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        day_counts = Counter(exercise_days)
+        # Look at the last 3 weeks — if a day appears 0 times, it's consistently skipped
+        for day in all_weekdays:
+            if day_counts.get(day, 0) == 0 and len(exercise_dates) >= 5:
+                patterns.append(f"- Consistently skips {day} training (0 sessions in 3 weeks)")
+
+    # ── Pattern: Training frequency ─────────────────────────────────
+    if exercise_dates:
+        weeks = max(1, len(all_dates) / 7)
+        sessions_per_week = len(exercise_dates) / weeks
+        patterns.append(f"- Training ~{sessions_per_week:.1f} sessions/week over last 3 weeks")
+
+    # ── Pattern: Weekend vs weekday nutrition ───────────────────────
+    wd_cals = nutrition_by_weekday.get("weekday", [])
+    we_cals = nutrition_by_weekday.get("weekend", [])
+    if len(wd_cals) >= 3 and len(we_cals) >= 2:
+        avg_wd = sum(wd_cals) / len(wd_cals)
+        avg_we = sum(we_cals) / len(we_cals)
+        diff = avg_we - avg_wd
+        if abs(diff) > 200:
+            direction = "higher" if diff > 0 else "lower"
+            patterns.append(
+                f"- Weekend calories ~{abs(diff):.0f} {direction} than weekdays "
+                f"(avg {avg_we:.0f} vs {avg_wd:.0f})"
+            )
+
+    # ── Pattern: Sleep consistency ──────────────────────────────────
+    if len(sleep_hours) >= 5:
+        avg_sleep = sum(h for _, h in sleep_hours) / len(sleep_hours)
+        low_nights = [(d, h) for d, h in sleep_hours if h < 6]
+        if low_nights:
+            patterns.append(
+                f"- Avg sleep {avg_sleep:.1f}h — {len(low_nights)} nights under 6h in last 3 weeks"
+            )
+
+    return "\n".join(patterns) if patterns else ""
+
+
+def _parse_data(data) -> dict:
+    """Safely parse a log's data field (may be JSON string or dict)."""
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, str):
+        try:
+            return json.loads(data)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return {}

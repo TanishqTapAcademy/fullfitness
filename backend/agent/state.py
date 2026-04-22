@@ -1,4 +1,4 @@
-from typing import Annotated, TypedDict
+from typing import Any, Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -9,7 +9,9 @@ class AgentState(TypedDict):
     user_id: str
     run_id: str  # Session scope for mem0 (e.g. "user_id:2026-04-22")
     db_user_id: str  # Internal DB user ID to avoid repeated lookups
+    db_user: Any  # Prisma user object passed from route (avoids re-fetch)
     chat_history: list[dict]  # Recent chat messages from DB for conversational context
     memories: str
     user_profile: str
     recent_summary: str
+    active_patterns: str  # Detected behavioral patterns from activity logs

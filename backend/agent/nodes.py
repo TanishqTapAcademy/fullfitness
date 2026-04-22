@@ -12,8 +12,13 @@ from agent.context import (
 
 
 async def load_context(state: AgentState) -> dict:
-    """Pre-LLM node: fetch Mem0 memories, profile, and recent summary."""
+    """Pre-LLM node: fetch Mem0 memories, profile, recent summary, and chat history."""
+    import logging
+    import time
     from main import db
+
+    logger = logging.getLogger(__name__)
+    t0 = time.monotonic()
 
     user_id = state["user_id"]
     run_id = state.get("run_id", "")
@@ -31,16 +36,29 @@ async def load_context(state: AgentState) -> dict:
                 last_user_msg = content
             break
 
-    # Single user lookup + parallel profile/summary fetch + two-tier memory search
-    profile, summary, memories, db_user_id = await get_full_context(db, user_id, last_user_msg, run_id)
+    # Reuse db_user from route if available (avoids ~2s duplicate user lookup)
+    db_user = state.get("db_user")
+    existing_db_user_id = state.get("db_user_id", "")
 
-    # Load recent chat history from DB for conversational context
-    chat_history: list[dict] = []
-    if db_user_id:
+    # Run context fetch AND chat history in parallel
+    import asyncio
+
+    async def _load_chat_history():
+        if not existing_db_user_id:
+            return []
         try:
-            chat_history = await load_session_messages(db, db_user_id)
+            return await load_session_messages(db, existing_db_user_id)
         except Exception as e:
-            print(f"[context] chat history load error: {e}")
+            logger.warning("chat history load error: %s", e)
+            return []
+
+    (profile, summary, memories, db_user_id, patterns), chat_history = await asyncio.gather(
+        get_full_context(db, user_id, last_user_msg, run_id, db_user=db_user),
+        _load_chat_history(),
+    )
+
+    elapsed = time.monotonic() - t0
+    logger.info("load_context done in %.2fs for user %s", elapsed, user_id)
 
     return {
         "user_profile": profile,
@@ -48,18 +66,25 @@ async def load_context(state: AgentState) -> dict:
         "memories": memories,
         "db_user_id": db_user_id,
         "chat_history": chat_history,
+        "active_patterns": patterns,
     }
 
 
 async def call_model(state: AgentState) -> dict:
     """Main agent node: call LLM with tools bound."""
+    import logging
+    import time
     from agent.graph import get_llm_with_tools
+
+    logger = logging.getLogger(__name__)
+    t0 = time.monotonic()
 
     system = build_system_prompt(
         user_profile=state.get("user_profile", ""),
         memories=state.get("memories", ""),
         recent_summary=state.get("recent_summary", ""),
         user_id=state.get("user_id", ""),
+        active_patterns=state.get("active_patterns", ""),
     )
 
     llm_with_tools = get_llm_with_tools()
@@ -102,14 +127,18 @@ async def call_model(state: AgentState) -> dict:
             history_msgs.append(AIMessage(content=m["content"]))
 
     messages = [SystemMessage(content=system)] + history_msgs + state["messages"]
+    logger.info("call_model: sending %d messages to LLM", len(messages))
     response = await llm_with_tools.ainvoke(messages)
+    logger.info("call_model: LLM responded in %.0fms", (time.monotonic() - t0) * 1000)
     return {"messages": [response]}
 
 
 async def save_memory_node(state: AgentState) -> dict:
-    """Post-LLM node: load full session messages and save to Mem0 (awaited)."""
+    """Post-LLM node: fire-and-forget mem0 save so it doesn't block the stream."""
+    import logging
     from main import db
 
+    logger = logging.getLogger(__name__)
     user_id = state["user_id"]
     run_id = state.get("run_id", "")
     db_user_id = state.get("db_user_id", "")
@@ -127,7 +156,7 @@ async def save_memory_node(state: AgentState) -> dict:
         try:
             session_msgs = await load_session_messages(db, db_user_id)
         except Exception as e:
-            print(f"[mem0] load session messages error: {e}")
+            logger.warning("mem0 load session messages error: %s", e)
 
     # Append current assistant response (not yet in DB)
     if last_assistant:
@@ -147,7 +176,19 @@ async def save_memory_node(state: AgentState) -> dict:
             ]
 
     if session_msgs:
-        # Awaited — ensures memory is saved before next turn
-        await asyncio.to_thread(save_memory, user_id, run_id, session_msgs)
+        # Fire-and-forget — don't block the stream waiting for mem0
+        asyncio.create_task(_save_memory_bg(user_id, run_id, session_msgs))
+        logger.info("mem0 save dispatched in background for user %s", user_id)
 
     return state
+
+
+async def _save_memory_bg(user_id: str, run_id: str, session_msgs: list[dict]):
+    """Background task for mem0 save."""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        await asyncio.to_thread(save_memory, user_id, run_id, session_msgs)
+        logger.info("mem0 save completed for user %s", user_id)
+    except Exception as e:
+        logger.warning("mem0 background save error: %s", e)

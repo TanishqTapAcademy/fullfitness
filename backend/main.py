@@ -1,7 +1,10 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO, force=True)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prisma import Prisma
@@ -32,6 +35,20 @@ async def lifespan(app: FastAPI):
 
     from scheduler import start_scheduler, stop_scheduler
     start_scheduler(db)
+
+    # Pre-warm mem0 + spaCy in background thread so first chat isn't slow
+    import threading
+    def _warmup_mem0():
+        try:
+            from memory.client import get_mem0
+            logger = logging.getLogger("warmup")
+            logger.info("Pre-warming mem0...")
+            mem0 = get_mem0()
+            if mem0:
+                logger.info("mem0 ready")
+        except Exception as e:
+            logging.getLogger("warmup").warning("mem0 warmup failed: %s", e)
+    threading.Thread(target=_warmup_mem0, daemon=True).start()
 
     yield
 

@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 from datetime import date, datetime
 from typing import Optional
 
@@ -10,6 +12,8 @@ from prisma import Json
 from auth import require_auth
 from posthog_client import capture as posthog_capture
 from storage import upload_image
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -28,6 +32,8 @@ async def chat_stream(
     from agent.graph import build_graph
 
     user_id = user.get("sub", "")
+    t_start = time.monotonic()
+    logger.info("POST /chat/stream — request received from user %s", user_id)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid user")
 
@@ -66,17 +72,6 @@ async def chat_stream(
                 },
             )
 
-    # Save user message to DB
-    if db_user:
-        create_data: dict = {
-            "role": "user",
-            "content": text or "[image]",
-            "user": {"connect": {"id": db_user.id}},
-        }
-        if image_url:
-            create_data["metadata"] = Json(json.dumps({"image_url": image_url}))
-        await db.chatmessage.create(data=create_data)
-
     # Build the HumanMessage — multimodal if image present
     if image_url:
         human_content = [
@@ -92,6 +87,20 @@ async def chat_stream(
     async def event_stream():
         full_response = ""
         tool_logs = []
+        first_token_sent = False
+        logger.info("Starting SSE stream for user %s", user_id)
+
+        # Save user message to DB in parallel with graph start (don't block)
+        import asyncio
+        if db_user:
+            create_data: dict = {
+                "role": "user",
+                "content": text or "[image]",
+                "user": {"connect": {"id": db_user.id}},
+            }
+            if image_url:
+                create_data["metadata"] = Json(json.dumps({"image_url": image_url}))
+            asyncio.create_task(db.chatmessage.create(data=create_data))
 
         try:
             async for event in graph.astream_events(
@@ -99,6 +108,8 @@ async def chat_stream(
                     "messages": [HumanMessage(content=human_content)],
                     "user_id": user_id,
                     "run_id": run_id,
+                    "db_user_id": db_user.id if db_user else "",
+                    "db_user": db_user,
                 },
                 version="v2",
             ):
@@ -110,6 +121,9 @@ async def chat_stream(
                     if chunk and hasattr(chunk, "content") and chunk.content:
                         content = chunk.content
                         if isinstance(content, str):
+                            if not first_token_sent:
+                                first_token_sent = True
+                                logger.info("⚡ TTFT (time to first token): %.0fms for user %s", (time.monotonic() - t_start) * 1000, user_id)
                             full_response += content
                             yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
 
@@ -146,6 +160,7 @@ async def chat_stream(
                 create_data["metadata"] = Json(json.dumps({"tool_logs": tool_logs}))
             await db.chatmessage.create(data=create_data)
 
+        logger.info("SSE stream ended for user %s — response_len=%d, tools=%d", user_id, len(full_response), len(tool_logs))
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(
@@ -229,13 +244,34 @@ async def chat_context(user: dict = Depends(require_auth)):
         summary = "No activity yet."
         is_first = True
 
-    first_ctx = " This is their FIRST time chatting — introduce yourself briefly as their coach." if is_first else ""
-    prompt = (
-        f"You are Coach — a direct, warm fitness coach in the Fity app. "
-        f"It's {time_of_day}.{first_ctx} "
-        f"User: {profile}. Recent 7 days: {summary}. "
-        f"Write a single short opener message (1-2 sentences). No emojis. Sound like a real coach texting."
+    voice = (
+        "You are a personal fitness coach who texts clients directly. "
+        "Warm but not soft, direct, confident, occasionally dry. "
+        "Never say 'Great job!', never use therapy-speak, never sound like a chatbot or app. "
+        "Never call yourself 'Coach' as a name. No emojis, no exclamation marks, no filler. "
+        "Write 1-2 sentences max. Sound like a real person texting."
     )
+
+    if is_first:
+        # Brand-new user — use their onboarding data, not activity history
+        prompt = (
+            f"{voice} "
+            f"This person JUST signed up. It's {time_of_day}. "
+            f"Their profile from onboarding: {profile}. "
+            f"Write a short welcome that references something specific from their profile — "
+            f"their goal, experience level, or equipment. "
+            f"Don't mention activity or logging. Don't say 'welcome to the app'. "
+            f"Jump straight into being their coach — ask one question about where they're at "
+            f"or what they want to tackle first. Keep it casual and direct."
+        )
+    else:
+        prompt = (
+            f"{voice} "
+            f"It's {time_of_day}. User: {profile}. Recent 7 days: {summary}. "
+            f"Write a short opener that references something specific from their recent activity. "
+            f"If they've been consistent, acknowledge it briefly. "
+            f"If they've been quiet, ask what's going on — curious, not nagging."
+        )
 
     llm = get_llm()
 
