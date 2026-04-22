@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
+  useAnimatedKeyboard,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -13,26 +14,28 @@ import { ChatScroller } from '../../src/components/chat/ChatScroller';
 import { MessageBubble } from '../../src/components/chat/MessageBubble';
 import { InlineActionCard } from '../../src/components/chat/InlineActionCard';
 import { ChatInputBar } from '../../src/components/chat/ChatInputBar';
+import { DateSeparator } from '../../src/components/chat/DateSeparator';
 import { TraceButton } from '../../src/components/chat/TraceButton';
 import { useChatStore, type Msg } from '../../src/store/chatStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useProgressStore } from '../../src/store/progressStore';
 import { FIRST_MESSAGES } from '../../src/data/chatScripts';
 import { DURATION, SPRING_SOFT } from '../../src/theme/motion';
+import { dayLabel } from '../../src/utils/dateFormat';
 import { sendMessage, getHistory, streamOpener, type SSEEvent } from '../../src/services/chatApi';
 import { trackEvent } from '../../src/services/posthog';
 
 export default function Chat() {
   const router = useRouter();
   const {
-    messages, didSeeIntro, streaming, openerShownThisSession,
-    push, markIntroSeen, markOpenerShown, startStream, appendToStream, finishStream,
+    messages, didSeeIntro, streaming, openerShownThisSession, historyLoaded,
+    push, markIntroSeen, markOpenerShown, markHistoryLoaded,
+    startStream, appendToStream, finishStream,
     addExtraction, loadHistory, setLoading,
   } = useChatStore();
   const session = useAuthStore((s) => s.session);
   const handleExtraction = useProgressStore((s) => s.handleExtraction);
   const [typing, setTyping] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const pullProgress = useSharedValue(0);
@@ -49,7 +52,7 @@ export default function Chat() {
   // Load history + proactive opener for authenticated users
   useEffect(() => {
     if (!isAuthenticated || historyLoaded) return;
-    setHistoryLoaded(true);
+    markHistoryLoaded();
 
     (async () => {
       try {
@@ -147,6 +150,12 @@ export default function Chat() {
     };
   });
 
+  // Keyboard — same pattern as working frontend app
+  const keyboard = useAnimatedKeyboard();
+  const keyboardStyle = useAnimatedStyle(() => ({
+    marginBottom: keyboard.height.value,
+  }));
+
   const handleSend = async (text: string) => {
     trackEvent('message_sent', { message_length: text.length });
     push({ id: `u-${Date.now()}`, from: 'user', text });
@@ -168,9 +177,7 @@ export default function Chat() {
 
     // Authenticated: stream from LangGraph agent
     const streamId = `stream-${Date.now()}`;
-    setTyping(true);
     startStream(streamId);
-    setTyping(false);
 
     try {
       await sendMessage(text, (event: SSEEvent) => {
@@ -206,32 +213,39 @@ export default function Chat() {
     <View style={styles.root}>
       <Animated.View style={[styles.layer, layerStyle]}>
         <ChatHeader onBack={goHome} />
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={80}
-        >
+        <Animated.View style={[{ flex: 1 }, keyboardStyle]}>
           <ChatScroller scrollKey={messages.length + (typing ? 1 : 0)}>
-            {messages.map((m: Msg) => (
-              <React.Fragment key={m.id}>
-                <MessageBubble
-                  from={m.from}
-                  text={m.text}
-                  skipEnterAnimation={m.streaming}
-                />
-                {m.cta ? (
-                  <InlineActionCard
-                    label={m.cta.label}
-                    onPress={openBaseline}
-                    subtitle="~90 seconds · 4 tests"
+            {messages.map((m: Msg, i: number) => {
+              const prevDay = i > 0 && messages[i - 1].ts
+                ? new Date(messages[i - 1].ts!).toDateString()
+                : null;
+              const curDay = m.ts ? new Date(m.ts).toDateString() : null;
+              const showSep = curDay && curDay !== prevDay;
+
+              return (
+                <React.Fragment key={m.id}>
+                  {showSep && <DateSeparator label={dayLabel(m.ts!)} />}
+                  <MessageBubble
+                    from={m.from}
+                    text={m.text}
+                    ts={m.ts}
+                    skipEnterAnimation={m.streaming}
+                    streaming={m.streaming}
                   />
-                ) : null}
-              </React.Fragment>
-            ))}
+                  {m.cta ? (
+                    <InlineActionCard
+                      label={m.cta.label}
+                      onPress={openBaseline}
+                      subtitle="~90 seconds · 4 tests"
+                    />
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
             {typing ? <MessageBubble from="coach" typing /> : null}
           </ChatScroller>
           <ChatInputBar onSend={handleSend} />
-        </KeyboardAvoidingView>
+        </Animated.View>
       </Animated.View>
       <TraceButton onOpen={openTrace} progressSink={pullProgress} />
     </View>

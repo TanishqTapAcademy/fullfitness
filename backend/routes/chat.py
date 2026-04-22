@@ -188,12 +188,25 @@ async def chat_context(user: dict = Depends(require_auth)):
     llm = get_llm()
 
     async def event_stream():
+        full_response = ""
         try:
             async for chunk in llm.astream(prompt):
                 if chunk.content:
+                    full_response += chunk.content
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk.content})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+        # Save opener to DB so we have a record of coach-initiated messages
+        if db_user and full_response:
+            await db.chatmessage.create(
+                data={
+                    "role": "assistant",
+                    "content": full_response,
+                    "user": {"connect": {"id": db_user.id}},
+                }
+            )
+
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(

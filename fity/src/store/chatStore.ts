@@ -25,6 +25,7 @@ interface ChatState {
   messages: Msg[];
   didSeeIntro: boolean;
   openerShownThisSession: boolean;
+  historyLoaded: boolean;
   loading: boolean;
   streaming: boolean;
   streamingMsgId: string | null;
@@ -33,6 +34,7 @@ interface ChatState {
   push: (m: Omit<Msg, 'ts'> & { ts?: number }) => void;
   markIntroSeen: () => void;
   markOpenerShown: () => void;
+  markHistoryLoaded: () => void;
 
   /** Start a new streaming assistant message */
   startStream: (msgId: string) => void;
@@ -44,7 +46,7 @@ interface ChatState {
   /** Add extraction logs from tool calls */
   addExtraction: (logs: ExtractionLog[]) => void;
 
-  /** Prepend older messages (for history loading) */
+  /** Replace messages with loaded history */
   loadHistory: (msgs: Msg[]) => void;
 
   setLoading: (v: boolean) => void;
@@ -55,6 +57,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   didSeeIntro: false,
   openerShownThisSession: false,
+  historyLoaded: false,
   loading: false,
   streaming: false,
   streamingMsgId: null,
@@ -67,6 +70,7 @@ export const useChatStore = create<ChatState>((set) => ({
 
   markIntroSeen: () => set({ didSeeIntro: true }),
   markOpenerShown: () => set({ openerShownThisSession: true }),
+  markHistoryLoaded: () => set({ historyLoaded: true }),
 
   startStream: (msgId) =>
     set((s) => ({
@@ -98,7 +102,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({ extractions: [...s.extractions, ...logs] })),
 
   loadHistory: (msgs) =>
-    set((s) => ({ messages: [...msgs, ...s.messages] })),
+    set({ messages: msgs }),
 
   setLoading: (v) => set({ loading: v }),
 
@@ -106,6 +110,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set({
       messages: [],
       didSeeIntro: false,
+      historyLoaded: false,
       loading: false,
       streaming: false,
       streamingMsgId: null,

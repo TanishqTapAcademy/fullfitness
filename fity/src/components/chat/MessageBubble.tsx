@@ -1,10 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
+import LottieView from 'lottie-react-native';
 import { colors } from '../../theme/colors';
 import { CoachAvatarIcon } from '../icons';
 import { TypingIndicator } from './TypingIndicator';
 import { DURATION, EASING_OUT_CUBIC } from '../../theme/motion';
+import { timeLabel } from '../../utils/dateFormat';
 
 interface Props {
   from: 'coach' | 'user';
@@ -16,6 +18,10 @@ interface Props {
   typewriter?: boolean;
   /** When true, skip the enter animation (used for streaming messages). */
   skipEnterAnimation?: boolean;
+  /** When true, message is actively streaming from backend. */
+  streaming?: boolean;
+  /** Epoch ms — displayed as a subtle timestamp below the bubble. */
+  ts?: number;
 }
 
 /**
@@ -23,14 +29,22 @@ interface Props {
  * background) or the user variant (lime, right-aligned). Typing state shows
  * the shared TypingIndicator instead of text.
  */
-export const MessageBubble: React.FC<Props> = ({ from, text, typing, compact, typewriter, skipEnterAnimation }) => {
+export const MessageBubble: React.FC<Props> = ({ from, text, typing, compact, typewriter, skipEnterAnimation, streaming, ts }) => {
   const isCoach = from === 'coach';
-  const rendered = text;
+  const isWaitingForTokens = streaming && !text;
+  const showTime = !!ts && !typing && !isWaitingForTokens;
 
   const bubbleBody = typing ? (
     <TypingIndicator />
+  ) : isWaitingForTokens ? (
+    <LottieView
+      source={require('../../../assets/lootie/Running character.json')}
+      autoPlay
+      loop
+      style={styles.lottie}
+    />
   ) : (
-    <Text style={isCoach ? styles.coachText : styles.userText}>{rendered}</Text>
+    <Text style={isCoach ? styles.coachText : styles.userText}>{text}</Text>
   );
 
   const Container = skipEnterAnimation ? View : Animated.View;
@@ -43,7 +57,14 @@ export const MessageBubble: React.FC<Props> = ({ from, text, typing, compact, ty
     >
       {isCoach && !compact ? <CoachAvatarIcon size={32} /> : null}
       {isCoach && compact ? <View style={styles.avatarSpacer} /> : null}
-      <View style={[styles.bubble, isCoach ? styles.coach : styles.user]}>{bubbleBody}</View>
+      <View>
+        <View style={[styles.bubble, isCoach ? styles.coach : styles.user]}>{bubbleBody}</View>
+        {showTime && (
+          <Text style={[styles.time, isCoach ? styles.timeCoach : styles.timeUser]}>
+            {timeLabel(ts!)}
+          </Text>
+        )}
+      </View>
     </Container>
   );
 };
@@ -77,4 +98,8 @@ const styles = StyleSheet.create({
   },
   coachText: { color: colors.WHITE, fontSize: 15, lineHeight: 21 },
   userText: { color: colors.DARK, fontSize: 15, fontWeight: '600', lineHeight: 21 },
+  lottie: { width: 48, height: 48 },
+  time: { fontSize: 11, color: colors.MUTED, marginTop: 2 },
+  timeCoach: { textAlign: 'left' },
+  timeUser: { textAlign: 'right' },
 });

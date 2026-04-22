@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { Keyboard, Platform, ScrollView, StyleSheet } from 'react-native';
 import { colors } from '../../theme/colors';
 
 interface Props {
@@ -26,6 +26,15 @@ export const ChatScroller: React.FC<Props> = ({ children, scrollKey }) => {
     }, 60);
     return () => clearTimeout(t);
   }, [scrollKey]);
+
+  // Scroll to bottom when keyboard opens
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(event, () => {
+      setTimeout(() => ref.current?.scrollToEnd({ animated: true }), 100);
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <ScrollView

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { MicIcon, SendIcon } from '../icons';
 
@@ -17,6 +18,7 @@ export const ChatInputBar: React.FC<Props> = ({
   disabled = false,
 }) => {
   const [value, setValue] = useState('');
+  const insets = useSafeAreaInsets();
   const canSend = value.trim().length > 0 && !disabled;
 
   const handleSend = () => {
@@ -27,7 +29,7 @@ export const ChatInputBar: React.FC<Props> = ({
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       <View style={styles.inputBox}>
         <TextInput
           value={value}
