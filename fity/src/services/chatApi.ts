@@ -17,6 +17,7 @@ export interface SSEEvent {
 export async function sendMessage(
   text: string,
   onEvent: (event: SSEEvent) => void,
+  imageUri?: string,
 ): Promise<void> {
   const token = await getToken();
   if (!token) throw new Error('Not authenticated');
@@ -24,9 +25,8 @@ export async function sendMessage(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${BASE_URL}/chat/stream`);
-    xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.timeout = 30000;
+    xhr.timeout = 60000;
 
     let lastIndex = 0;
     let buffer = '';
@@ -69,7 +69,24 @@ export async function sendMessage(
     xhr.onerror = () => reject(new Error('Network error'));
     xhr.ontimeout = () => reject(new Error('Request timed out'));
 
-    xhr.send(JSON.stringify({ message: text }));
+    if (imageUri) {
+      // Multipart form data with image
+      const formData = new FormData();
+      formData.append('message', text);
+      const ext = imageUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+      formData.append('image', {
+        uri: imageUri,
+        name: `photo.${ext}`,
+        type: mimeType,
+      } as any);
+      xhr.send(formData);
+    } else {
+      // Text-only — use form data to match the new backend signature
+      const formData = new FormData();
+      formData.append('message', text);
+      xhr.send(formData);
+    }
   });
 }
 

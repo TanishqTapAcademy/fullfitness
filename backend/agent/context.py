@@ -183,7 +183,7 @@ async def load_session_messages(db: Prisma, db_user_id: str) -> list[dict]:
         order={"created_at": "asc"},
         take=20,
     )
-    return [{"role": m.role, "content": m.content} for m in messages]
+    return [{"role": m.role, "content": m.content, "metadata": m.metadata} for m in messages]
 
 
 def save_memory(user_id: str, run_id: str, messages: list[dict]) -> None:

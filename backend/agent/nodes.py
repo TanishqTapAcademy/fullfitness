@@ -18,11 +18,17 @@ async def load_context(state: AgentState) -> dict:
     user_id = state["user_id"]
     run_id = state.get("run_id", "")
 
-    # Get the last user message for memory search
+    # Get the last user message for memory search (handle multimodal content)
     last_user_msg = ""
     for msg in reversed(state["messages"]):
         if isinstance(msg, HumanMessage):
-            last_user_msg = msg.content
+            content = msg.content
+            if isinstance(content, list):
+                last_user_msg = " ".join(
+                    p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
+                )
+            else:
+                last_user_msg = content
             break
 
     # Single user lookup + parallel profile/summary fetch + two-tier memory search
@@ -62,14 +68,36 @@ async def call_model(state: AgentState) -> dict:
     # Exclude the last DB message if it matches the current user message (already in state)
     chat_history = list(state.get("chat_history", []))
     if chat_history and chat_history[-1]["role"] == "user":
-        current_msg = state["messages"][-1].content if state["messages"] else ""
+        raw_content = state["messages"][-1].content if state["messages"] else ""
+        # Extract text for comparison (multimodal content is a list)
+        if isinstance(raw_content, list):
+            current_msg = " ".join(
+                p.get("text", "") for p in raw_content if isinstance(p, dict) and p.get("type") == "text"
+            )
+        else:
+            current_msg = raw_content
         if chat_history[-1]["content"] == current_msg:
             chat_history.pop()
 
     history_msgs = []
     for m in chat_history:
         if m["role"] == "user":
-            history_msgs.append(HumanMessage(content=m["content"]))
+            # Rebuild multimodal message if image_url is in metadata
+            meta = m.get("metadata") or {}
+            if isinstance(meta, str):
+                import json as _json
+                try:
+                    meta = _json.loads(meta)
+                except Exception:
+                    meta = {}
+            image_url = meta.get("image_url")
+            if image_url:
+                history_msgs.append(HumanMessage(content=[
+                    {"type": "text", "text": m["content"] if m["content"] != "[image]" else "Look at this image."},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ]))
+            else:
+                history_msgs.append(HumanMessage(content=m["content"]))
         elif m["role"] == "assistant":
             history_msgs.append(AIMessage(content=m["content"]))
 

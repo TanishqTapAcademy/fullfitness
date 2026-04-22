@@ -63,6 +63,7 @@ export default function Chat() {
             from: m.role === 'user' ? 'user' : 'coach',
             text: m.content,
             ts: new Date(m.created_at).getTime(),
+            imageUri: m.metadata?.image_url,
           }));
           loadHistory(mapped);
           markIntroSeen();
@@ -156,9 +157,9 @@ export default function Chat() {
     marginBottom: keyboard.height.value,
   }));
 
-  const handleSend = async (text: string) => {
-    trackEvent('message_sent', { message_length: text.length });
-    push({ id: `u-${Date.now()}`, from: 'user', text });
+  const handleSend = async (text: string, imageUri?: string) => {
+    trackEvent('message_sent', { message_length: text.length, has_image: !!imageUri });
+    push({ id: `u-${Date.now()}`, from: 'user', text: text || '[image]', imageUri });
 
     if (!isAuthenticated) {
       // Canned ack for unauthenticated users
@@ -202,7 +203,7 @@ export default function Chat() {
             finishStream(streamId);
             break;
         }
-      });
+      }, imageUri);
     } catch {
       appendToStream(streamId, 'Connection lost. Try again.');
       finishStream(streamId);
@@ -231,6 +232,7 @@ export default function Chat() {
                     ts={m.ts}
                     skipEnterAnimation={m.streaming}
                     streaming={m.streaming}
+                    imageUri={m.imageUri}
                   />
                   {m.cta ? (
                     <InlineActionCard

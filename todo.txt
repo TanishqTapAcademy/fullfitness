@@ -582,9 +582,6 @@ relationship mapping later. That's your winning combo.
  todo:
 [] chat repsont and seletion option in varities
 [] image imput and store 
-[] chat to db update 
-[] verfy post hog 
-[] verfy memory(mem0)
 [] admin side update ?
 [] onboardig has to connected to a user ? 
 [] adapity  for the payment ?

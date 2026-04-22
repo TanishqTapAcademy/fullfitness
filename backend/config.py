@@ -14,6 +14,7 @@ PORT = int(os.getenv("PORT", "3001"))
 # Supabase
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 # Admin
 ADMIN_JWT_SECRET = os.getenv("ADMIN_JWT_SECRET", "")

@@ -1,24 +1,28 @@
 import json
 from datetime import date, datetime
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
 
 from prisma import Json
 from auth import require_auth
 from posthog_client import capture as posthog_capture
+from storage import upload_image
 
 router = APIRouter()
 
-
-class ChatRequest(BaseModel):
-    message: str
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 @router.post("/stream")
-async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
+async def chat_stream(
+    message: str = Form(""),
+    image: Optional[UploadFile] = File(None),
+    user: dict = Depends(require_auth),
+):
     """SSE streaming chat endpoint. Runs the LangGraph agent and streams tokens."""
     from main import db
     from agent.graph import build_graph
@@ -27,16 +31,40 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid user")
 
+    # Handle image upload if present
+    image_url: str | None = None
+    if image and image.filename:
+        if image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported image type: {image.content_type}")
+        file_bytes = await image.read()
+        if len(file_bytes) > MAX_IMAGE_SIZE:
+            raise HTTPException(status_code=413, detail="Image exceeds 5 MB limit")
+        image_url = upload_image(file_bytes, user_id, image.content_type)
+
+    text = message.strip()
+    if not text and not image_url:
+        raise HTTPException(status_code=400, detail="Message or image required")
+
     # Save user message to DB
     db_user = await db.user.find_first(where={"supabase_id": user_id})
     if db_user:
-        await db.chatmessage.create(
-            data={
-                "role": "user",
-                "content": body.message,
-                "user": {"connect": {"id": db_user.id}},
-            }
-        )
+        create_data: dict = {
+            "role": "user",
+            "content": text or "[image]",
+            "user": {"connect": {"id": db_user.id}},
+        }
+        if image_url:
+            create_data["metadata"] = Json(json.dumps({"image_url": image_url}))
+        await db.chatmessage.create(data=create_data)
+
+    # Build the HumanMessage — multimodal if image present
+    if image_url:
+        human_content = [
+            {"type": "text", "text": text or "What do you see in this image?"},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ]
+    else:
+        human_content = text
 
     graph = build_graph()
     run_id = f"{user_id}:{date.today().isoformat()}"
@@ -48,7 +76,7 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
         try:
             async for event in graph.astream_events(
                 {
-                    "messages": [HumanMessage(content=body.message)],
+                    "messages": [HumanMessage(content=human_content)],
                     "user_id": user_id,
                     "run_id": run_id,
                 },

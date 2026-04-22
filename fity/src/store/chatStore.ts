@@ -14,6 +14,7 @@ export interface Msg {
   ts: number;
   cta?: ChatCTA;
   streaming?: boolean;
+  imageUri?: string;
 }
 
 export interface ExtractionLog {
