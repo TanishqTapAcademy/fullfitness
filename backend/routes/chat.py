@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -39,6 +39,7 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
         )
 
     graph = build_graph()
+    run_id = f"{user_id}:{date.today().isoformat()}"
 
     async def event_stream():
         full_response = ""
@@ -49,6 +50,7 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
                 {
                     "messages": [HumanMessage(content=body.message)],
                     "user_id": user_id,
+                    "run_id": run_id,
                 },
                 version="v2",
             ):
@@ -68,7 +70,9 @@ async def chat_stream(body: ChatRequest, user: dict = Depends(require_auth)):
                     output = event.get("data", {}).get("output", "")
                     tool_name = event.get("name", "")
                     if tool_name and output:
-                        log_entry = {"tool": tool_name, "result": str(output)}
+                        # Extract .content from ToolMessage objects, fall back to str
+                        result = getattr(output, "content", None) or str(output)
+                        log_entry = {"tool": tool_name, "result": result}
                         tool_logs.append(log_entry)
                         yield f"data: {json.dumps({'type': 'extraction', 'logs': [log_entry]})}\n\n"
 

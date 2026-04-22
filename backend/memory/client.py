@@ -1,6 +1,4 @@
-from typing import Optional
-
-from config import DIRECT_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENAI_API_KEY
+from config import DIRECT_URL, OPENAI_API_KEY, MEM0_LLM_MODEL
 
 _mem0_instance = None
 
@@ -30,9 +28,8 @@ def get_mem0():
         "llm": {
             "provider": "openai",
             "config": {
-                "model": OPENROUTER_MODEL,
-                "api_key": OPENROUTER_API_KEY,
-                "openai_base_url": "https://openrouter.ai/api/v1",
+                "model": MEM0_LLM_MODEL,
+                "api_key": OPENAI_API_KEY,
             },
         },
         "embedder": {

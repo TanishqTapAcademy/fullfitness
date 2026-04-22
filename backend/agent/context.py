@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from prisma import Prisma
 
@@ -85,7 +85,7 @@ async def get_recent_summary_for_user(db: Prisma, user) -> str:
     return "\n".join(lines)
 
 
-async def get_full_context(db: Prisma, user_id: str, query: str) -> tuple[str, str, str, str]:
+async def get_full_context(db: Prisma, user_id: str, query: str, run_id: str = "") -> tuple[str, str, str, str]:
     """Fetch profile, summary, and memories in one call with single user lookup.
     Returns (profile, summary, memories, db_user_id)."""
     user = await db.user.find_first(where={"supabase_id": user_id})
@@ -97,12 +97,12 @@ async def get_full_context(db: Prisma, user_id: str, query: str) -> tuple[str, s
     summary_task = get_recent_summary_for_user(db, user)
     profile, summary = await asyncio.gather(profile_task, summary_task)
 
-    # Mem0 search — run in thread with 2s timeout so it doesn't stall the response
+    # Mem0 two-tier search — run in thread with 3s timeout
     if query:
         try:
             memories = await asyncio.wait_for(
-                asyncio.to_thread(search_memories, user_id, query),
-                timeout=2.0,
+                asyncio.to_thread(search_memories, user_id, run_id, query),
+                timeout=3.0,
             )
         except asyncio.TimeoutError:
             memories = "No memories (timed out)."
@@ -112,31 +112,86 @@ async def get_full_context(db: Prisma, user_id: str, query: str) -> tuple[str, s
     return profile, summary, memories, user.id
 
 
-def search_memories(user_id: str, query: str) -> str:
+def search_memories(user_id: str, run_id: str, query: str) -> str:
     mem0 = get_mem0()
     if not mem0:
         return "Memory not configured."
 
     try:
-        results = mem0.search(query, filters={"user_id": user_id}, limit=10)
-        if not results or not results.get("results"):
+        seen_ids: set[str] = set()
+        session_lines: list[str] = []
+        longterm_lines: list[str] = []
+
+        # Tier 1: Session memories (scoped by run_id)
+        if run_id:
+            try:
+                session_results = mem0.search(
+                    query,
+                    filters={"user_id": user_id, "run_id": run_id},
+                    limit=5,
+                )
+                for r in (session_results or {}).get("results", []):
+                    mid = r.get("id", "")
+                    if mid:
+                        seen_ids.add(mid)
+                    text = r.get("memory", r.get("text", ""))
+                    if text:
+                        session_lines.append(f"- {text}")
+            except Exception as e:
+                print(f"[mem0] session search error: {e}")
+
+        # Tier 2: Long-term memories (user-level)
+        try:
+            longterm_results = mem0.search(
+                query,
+                filters={"user_id": user_id},
+                limit=5,
+            )
+            for r in (longterm_results or {}).get("results", []):
+                mid = r.get("id", "")
+                if mid and mid in seen_ids:
+                    continue
+                text = r.get("memory", r.get("text", ""))
+                if text:
+                    longterm_lines.append(f"- {text}")
+        except Exception as e:
+            print(f"[mem0] longterm search error: {e}")
+
+        if not session_lines and not longterm_lines:
             return "No relevant memories."
 
-        lines = []
-        for r in results["results"]:
-            lines.append(f"- {r.get('memory', r.get('text', ''))}")
-        return "\n".join(lines)
+        sections: list[str] = []
+        if session_lines:
+            sections.append("Today's conversation:\n" + "\n".join(session_lines))
+        if longterm_lines:
+            sections.append("Long-term:\n" + "\n".join(longterm_lines))
+        return "\n\n".join(sections)
+
     except Exception as e:
         print(f"[mem0] search error: {e}")
         return "Memory search unavailable."
 
 
-def save_memory(user_id: str, messages: list[dict]) -> None:
+async def load_session_messages(db: Prisma, db_user_id: str) -> list[dict]:
+    """Load today's chat messages from DB for richer mem0 extraction."""
+    today_start = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    messages = await db.chatmessage.find_many(
+        where={
+            "user_id": db_user_id,
+            "created_at": {"gte": today_start},
+        },
+        order={"created_at": "asc"},
+        take=20,
+    )
+    return [{"role": m.role, "content": m.content} for m in messages]
+
+
+def save_memory(user_id: str, run_id: str, messages: list[dict]) -> None:
     mem0 = get_mem0()
     if not mem0:
         return
 
     try:
-        mem0.add(messages, user_id=user_id)
+        mem0.add(messages, user_id=user_id, run_id=run_id)
     except Exception as e:
         print(f"[mem0] save error: {e}")

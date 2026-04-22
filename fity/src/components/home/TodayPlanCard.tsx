@@ -37,7 +37,7 @@ export const TodayPlanCard: React.FC<Props> = ({ title, durationMin, blocks, del
 
     <View style={styles.blocks}>
       {blocks.map((b, i) => (
-        <View key={b} style={styles.block}>
+        <View key={`${i}-${b}`} style={styles.block}>
           <Text style={styles.blockNum}>{i + 1}</Text>
           <Text style={styles.blockText}>{b}</Text>
         </View>

@@ -24,6 +24,7 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
 # OpenAI (embeddings for Mem0)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+MEM0_LLM_MODEL = os.getenv("MEM0_LLM_MODEL", "gpt-4o-mini")
 
 # OneSignal
 ONESIGNAL_APP_ID = os.getenv("ONESIGNAL_APP_ID", "")
