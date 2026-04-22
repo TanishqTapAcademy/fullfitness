@@ -24,6 +24,8 @@ import { DURATION, SPRING_SOFT } from '../../src/theme/motion';
 import { dayLabel } from '../../src/utils/dateFormat';
 import { sendMessage, getHistory, streamOpener, type SSEEvent } from '../../src/services/chatApi';
 import { trackEvent } from '../../src/services/posthog';
+import { useSubscriptionStore } from '../../src/store/subscriptionStore';
+import { MessageLimitSheet } from '../../src/components/chat/MessageLimitSheet';
 
 export default function Chat() {
   const router = useRouter();
@@ -35,7 +37,9 @@ export default function Chat() {
   } = useChatStore();
   const session = useAuthStore((s) => s.session);
   const handleExtraction = useProgressStore((s) => s.handleExtraction);
+  const { canSendMessage, incrementMessageCount, remainingMessages, isPremium, checkSubscription, resetIfNewDay } = useSubscriptionStore();
   const [typing, setTyping] = useState(false);
+  const [showLimitSheet, setShowLimitSheet] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const pullProgress = useSharedValue(0);
@@ -44,9 +48,13 @@ export default function Chat() {
 
   const isAuthenticated = !!session?.access_token;
 
-  // Track chat opened
+  // Track chat opened + check subscription
   useEffect(() => {
     trackEvent('chat_opened', { is_authenticated: isAuthenticated });
+    if (isAuthenticated) {
+      checkSubscription();
+      resetIfNewDay();
+    }
   }, []);
 
   // Load history + proactive opener for authenticated users
@@ -158,8 +166,16 @@ export default function Chat() {
   }));
 
   const handleSend = async (text: string, imageUri?: string) => {
+    // Check message limit for authenticated free users
+    if (isAuthenticated && !canSendMessage()) {
+      trackEvent('paywall_triggered', { trigger: 'message_limit' });
+      setShowLimitSheet(true);
+      return;
+    }
+
     trackEvent('message_sent', { message_length: text.length, has_image: !!imageUri });
     push({ id: `u-${Date.now()}`, from: 'user', text: text || '[image]', imageUri });
+    if (isAuthenticated) incrementMessageCount();
 
     if (!isAuthenticated) {
       // Canned ack for unauthenticated users
@@ -246,7 +262,21 @@ export default function Chat() {
             })}
             {typing ? <MessageBubble from="coach" typing /> : null}
           </ChatScroller>
-          <ChatInputBar onSend={handleSend} />
+          {showLimitSheet && (
+            <MessageLimitSheet
+              remaining={remainingMessages()}
+              limit={5}
+              onUpgrade={() => {
+                setShowLimitSheet(false);
+                router.push('/(app)/paywall');
+              }}
+              onDismiss={() => setShowLimitSheet(false)}
+            />
+          )}
+          <ChatInputBar
+            onSend={handleSend}
+            remainingMessages={isAuthenticated && !isPremium ? remainingMessages() : undefined}
+          />
         </Animated.View>
       </Animated.View>
       <TraceButton onOpen={openTrace} progressSink={pullProgress} />

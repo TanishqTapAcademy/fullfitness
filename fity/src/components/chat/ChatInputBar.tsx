@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,12 +12,14 @@ interface Props {
   onSend?: (text: string, imageUri?: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  remainingMessages?: number;
 }
 
 export const ChatInputBar: React.FC<Props> = ({
   onSend,
   placeholder = 'Message Coach',
   disabled = false,
+  remainingMessages,
 }) => {
   const [value, setValue] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -46,6 +48,13 @@ export const ChatInputBar: React.FC<Props> = ({
   return (
     <>
       <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        {typeof remainingMessages === 'number' && remainingMessages <= 3 && (
+          <Text style={styles.remaining}>
+            {remainingMessages === 0
+              ? 'No free messages left today'
+              : `${remainingMessages} message${remainingMessages === 1 ? '' : 's'} left today`}
+          </Text>
+        )}
         {imageUri && (
           <View style={styles.previewRow}>
             <View style={styles.previewContainer}>
@@ -101,6 +110,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.DARK,
     borderTopWidth: 1,
     borderTopColor: colors.GRAY,
+  },
+  remaining: {
+    fontSize: 12,
+    color: colors.MUTED,
+    textAlign: 'center',
+    marginBottom: 6,
   },
   row: {
     flexDirection: 'row',

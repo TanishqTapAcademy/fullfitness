@@ -13,6 +13,7 @@ from routes.admin_auth import router as auth_router
 from routes.chat import router as chat_router
 from routes.progress import router as progress_router
 from routes.notifications import router as notifications_router
+from routes.subscription import router as subscription_router
 
 load_dotenv()
 
@@ -55,6 +56,7 @@ app.include_router(auth_router, prefix="/api/auth")
 app.include_router(chat_router, prefix="/api/chat")
 app.include_router(progress_router, prefix="/api/progress")
 app.include_router(notifications_router, prefix="/api/notifications")
+app.include_router(subscription_router, prefix="/api/webhooks")
 
 
 @app.get("/api/health")

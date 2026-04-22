@@ -41,7 +41,7 @@
           }
         }
       ],
-      "expo-secure-store",
+      ["expo-secure-store", { "configureAndroidBackup": false }],
       "expo-apple-authentication",
       "@react-native-google-signin/google-signin",
       [
@@ -51,7 +51,8 @@
           "devTeam": "OPTIONAL_APPLE_TEAM_ID"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      ["react-native-adapty", { "replaceAndroidBackupConfig": true }]
     ],
     "experiments": {
       "typedRoutes": true,

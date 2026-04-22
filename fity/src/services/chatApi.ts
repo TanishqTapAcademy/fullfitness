@@ -90,6 +90,20 @@ export async function sendMessage(
   });
 }
 
+export async function devTogglePremium(): Promise<boolean> {
+  const token = await getToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`${BASE_URL}/webhooks/dev-toggle-premium`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export interface ChatMessageRecord {
   id: string;
   role: 'user' | 'assistant' | 'system';

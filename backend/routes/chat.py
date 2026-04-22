@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import HumanMessage
 
 from prisma import Json
@@ -45,8 +45,28 @@ async def chat_stream(
     if not text and not image_url:
         raise HTTPException(status_code=400, detail="Message or image required")
 
-    # Save user message to DB
+    # Check message limit for free-tier users
     db_user = await db.user.find_first(where={"supabase_id": user_id})
+    if db_user and db_user.subscription_tier == "free":
+        today_start = datetime.combine(date.today(), datetime.min.time())
+        message_count = await db.chatmessage.count(
+            where={
+                "user_id": db_user.id,
+                "role": "user",
+                "created_at": {"gte": today_start},
+            }
+        )
+        if message_count >= db_user.daily_message_limit:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "daily_limit_reached",
+                    "limit": db_user.daily_message_limit,
+                    "count": message_count,
+                },
+            )
+
+    # Save user message to DB
     if db_user:
         create_data: dict = {
             "role": "user",

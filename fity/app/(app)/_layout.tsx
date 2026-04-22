@@ -37,6 +37,14 @@ export default function AppLayout() {
           gestureEnabled: true,
         }}
       />
+      <Stack.Screen
+        name="paywall"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+          gestureEnabled: true,
+        }}
+      />
     </Stack>
   );
 }

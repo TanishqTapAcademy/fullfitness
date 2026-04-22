@@ -98,6 +98,9 @@ async def sync_user(body: UserSyncRequest, user: dict = Depends(require_auth)):
             "display_name": updated_user.display_name,
             "avatar": updated_user.avatar,
             "role": updated_user.role,
+            "subscription_tier": updated_user.subscription_tier,
+            "subscription_status": updated_user.subscription_status,
+            "daily_message_limit": updated_user.daily_message_limit,
         } if updated_user else None,
     }
 
@@ -117,5 +120,8 @@ async def get_me(user: dict = Depends(require_auth)):
             "display_name": profile.display_name,
             "avatar": profile.avatar,
             "role": profile.role,
+            "subscription_tier": profile.subscription_tier,
+            "subscription_status": profile.subscription_status,
+            "daily_message_limit": profile.daily_message_limit,
         }
     }

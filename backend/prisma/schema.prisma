@@ -49,6 +49,14 @@ model User {
   onesignal_id  String?
   timezone      String?    // IANA tz e.g. "America/New_York"
   last_nudge_at DateTime?  // dedup: only one nudge per day
+
+  // Subscription (Adapty)
+  subscription_status  String    @default("free")  // free, trial, active, expired, cancelled
+  subscription_tier    String    @default("free")  // free, pro
+  subscription_expires DateTime?
+  daily_message_limit  Int       @default(5)
+  adapty_profile_id    String?
+
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 

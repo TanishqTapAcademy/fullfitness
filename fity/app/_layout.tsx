@@ -11,15 +11,17 @@ import { supabase } from '../src/services/supabase';
 import { initOneSignal, registerPushToken, setupNotificationHandler } from '../src/services/onesignal';
 import { router } from 'expo-router';
 import { initPostHog, identifyUser } from '../src/services/posthog';
+import { initAdapty, identifyAdaptyUser } from '../src/services/adapty';
 
 export default function RootLayout() {
   const initialized = useAuthStore((s) => s.initialized);
 
   useEffect(() => {
-    // Initialize OneSignal and PostHog early
+    // Initialize OneSignal, PostHog, and Adapty early
     initOneSignal();
     setupNotificationHandler(() => router.push('/(app)/chat'));
     initPostHog();
+    initAdapty();
 
     const boot = async () => {
       await useAuthStore.getState().initialize();
@@ -32,12 +34,13 @@ export default function RootLayout() {
           if (user) {
             useAuthStore.getState().setProfile(user);
             useAuthStore.getState().setIsNewUser(!user.display_name);
-            // Identify user in PostHog
+            // Identify user in PostHog and Adapty
             identifyUser(session.user.id, {
               email: session.user.email,
               display_name: user.display_name,
               created_at: session.user.created_at,
             });
+            identifyAdaptyUser(session.user.id);
           }
           // Register push token with backend
           registerPushToken();

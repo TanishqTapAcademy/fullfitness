@@ -5,6 +5,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import type { Session, User } from '@supabase/supabase-js';
+import { identifyAdaptyUser, logoutAdapty } from '../services/adapty';
 
 // Configure Google Sign-In with Web Client ID
 GoogleSignin.configure({
@@ -81,15 +82,17 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signInWithEmail: async (email, password) => {
     set({ loading: true });
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     set({ loading: false });
+    if (data.session?.user?.id) identifyAdaptyUser(data.session.user.id);
     return { error: error?.message ?? null };
   },
 
   signUpWithEmail: async (email, password) => {
     set({ loading: true });
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     set({ loading: false });
+    if (data.session?.user?.id) identifyAdaptyUser(data.session.user.id);
     return { error: error?.message ?? null };
   },
 
@@ -111,12 +114,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         return { error: 'No identity token from Apple' };
       }
 
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken,
       });
 
       set({ loading: false });
+      if (data.session?.user?.id) identifyAdaptyUser(data.session.user.id);
       return { error: error?.message ?? null };
     } catch (e: any) {
       set({ loading: false });
@@ -136,12 +140,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         return { error: 'No ID token from Google' };
       }
 
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: response.data.idToken,
       });
 
       set({ loading: false });
+      if (data.session?.user?.id) identifyAdaptyUser(data.session.user.id);
       return { error: error?.message ?? null };
     } catch (e: any) {
       set({ loading: false });
@@ -154,6 +159,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Clear Google's cached account so the picker shows next time
     try { await GoogleSignin.signOut(); } catch {}
     await supabase.auth.signOut();
+    logoutAdapty();
     cacheProfile(null);
     set({ session: null, user: null, skippedAuth: false, isNewUser: null, profile: null });
   },

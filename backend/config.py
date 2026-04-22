@@ -34,3 +34,7 @@ ONESIGNAL_REST_API_KEY = os.getenv("ONESIGNAL_REST_API_KEY", "")
 # PostHog
 POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Adapty
+ADAPTY_SECRET_KEY = os.getenv("ADAPTY_SECRET_KEY", "")
+ADAPTY_WEBHOOK_SECRET = os.getenv("ADAPTY_WEBHOOK_SECRET", "")
